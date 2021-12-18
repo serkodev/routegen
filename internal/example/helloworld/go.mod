@@ -1,8 +1,11 @@
-module github.com/serkodev/pbr
+module example.com/foo
 
 go 1.17
 
-require github.com/gin-gonic/gin v1.7.7
+require (
+	github.com/gin-gonic/gin v1.7.7
+	github.com/serkodev/pbr v0.0.0
+)
 
 require (
 	github.com/gin-contrib/sse v0.1.0 // indirect
@@ -20,3 +23,5 @@ require (
 	golang.org/x/sys v0.0.0-20200116001909-b77594299b42 // indirect
 	gopkg.in/yaml.v2 v2.2.8 // indirect
 )
+
+replace github.com/serkodev/pbr v0.0.0 => ../../../

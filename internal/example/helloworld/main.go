@@ -1,6 +1,6 @@
 package main
 
-import "github.com/serkodev/pbr/router"
+import "example.com/foo/router"
 
 func main() {
 	router.Run()
