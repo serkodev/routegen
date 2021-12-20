@@ -6,25 +6,25 @@ package router
 
 import (
 	"github.com/gin-gonic/gin"
-	"github.com/serkodev/pbr/pbr"
+	"github.com/serkodev/pbr"
 )
 
-type PlaceOrderRequest struct {
-	// A combination of case-sensitive alphanumerics, all numbers, or all letters of up to 32 characters.
-	clientOrderID *string `param:"clientOid,required" defaultValuer:"uuid()"`
+type tts struct {
+	a int
 }
 
 //go:generate echo "start gen pbr..."
 ////go:generate go run github.com/serkodev/pbr
 //go:generate $HOME/go/bin/pbr
 func Run() {
-	router := gin.Default()
+	rrrrrr := gin.Default()
 
 	// r := &route.Route{}
 	// about.GET(r)
 	// xx.GET(r)
 
-	pbr.Build(router)
+	// b := tts{a: 123}
+	pbr.Build(rrrrrr)
 
-	router.Run()
+	rrrrrr.Run()
 }

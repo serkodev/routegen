@@ -1,3 +1,6 @@
+//go:build !pbrinject
+// +build !pbrinject
+
 package router
 
 import (
