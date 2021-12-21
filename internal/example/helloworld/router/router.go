@@ -13,6 +13,8 @@ type tts struct {
 	a int
 }
 
+//wtf
+
 //go:generate echo "start gen pbr..."
 ////go:generate go run github.com/serkodev/pbr
 //go:generate $HOME/go/bin/pbr

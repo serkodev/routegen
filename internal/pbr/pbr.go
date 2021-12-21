@@ -1,7 +1,10 @@
 package pbr
 
 import (
+	"bytes"
 	"go/ast"
+	"go/printer"
+	"io"
 	"log"
 	"os"
 
@@ -42,6 +45,17 @@ func Load() error {
 			println("import", i.Path)
 		}
 
+		// for _, f := range pkg.Syntax {
+		// 	for _, sx := range f.Decls {
+		// 		var buf bytes.Buffer
+		// 		if err := printer.Fprint(io.Writer(&buf), pkg.Fset, sx); err != nil {
+		// 			panic(err)
+		// 		}
+		// 		println("printer =====")
+		// 		println(buf.String())
+		// 	}
+		// }
+
 		for _, f := range pkg.Syntax {
 			for _, decl := range f.Decls {
 				fn, ok := decl.(*ast.FuncDecl)
@@ -59,11 +73,27 @@ func Load() error {
 					continue
 				}
 
+				// println("comment", fn.Doc.Text())
+				println("call pos", pkg.Fset.Position(buildCall.Pos()).Offset, pkg.Fset.Position(buildCall.End()).Offset)
+
 				println("checking args...")
 				for _, arg := range buildCall.Args {
-					t := pkg.TypesInfo.TypeOf(arg).Underlying().String()
-					println(t)
+					t := pkg.TypesInfo.TypeOf(arg).String()
+					println("call arg type", t)
 				}
+
+				if fn.Doc != nil {
+					println("fn pos (comment)", pkg.Fset.Position(fn.Doc.Pos()).Offset)
+				} else {
+					println("fn pos", pkg.Fset.Position(fn.Pos()).Offset)
+				}
+
+				// print function, ref: wire.go writeAST rewritePkgRefs
+				var buf bytes.Buffer
+				if err := printer.Fprint(io.Writer(&buf), pkg.Fset, fn); err != nil {
+					panic(err)
+				}
+				println("printer", buf.String())
 			}
 		}
 	}
