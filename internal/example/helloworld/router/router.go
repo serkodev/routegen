@@ -7,9 +7,14 @@ import (
 	"github.com/serkodev/pbr"
 )
 
-// gin.RouterGroup
-func Build(r *gin.Engine) {
+type bty interface {
+}
+
+// allow pbr.Build() call only
+/* hi */
+func (b *bty) Build(r *gin.Engine) /*hi*/ (bb /*on9*/ *gin.Engine, err error) { // gin.RouterGroup
 	pbr.Build(r)
+	println("hihi")
 }
 
 func Run() {
@@ -19,7 +24,7 @@ func Run() {
 	// about.GET(r)
 	// xx.GET(r)
 
-	Build(rrrrrr)
+	Build(rrrrrr, nil, nil)
 
 	rrrrrr.Run()
 }

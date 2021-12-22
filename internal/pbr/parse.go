@@ -92,3 +92,16 @@ func findInjectorBuild(info *types.Info, fn *ast.FuncDecl) (*ast.CallExpr, error
 	}
 	return wireBuildCall, nil
 }
+
+func getInjectorStmt(info *types.Info, stmt ast.Stmt) *ast.CallExpr {
+	if es, ok := stmt.(*ast.ExprStmt); ok {
+		if call, ok := es.X.(*ast.CallExpr); ok {
+			buildObj := qualifiedIdentObject(info, call.Fun)
+			if buildObj == nil || buildObj.Pkg() == nil || !isWireImport(buildObj.Pkg().Path()) || buildObj.Name() != "Build" {
+				return nil
+			}
+			return call
+		}
+	}
+	return nil
+}

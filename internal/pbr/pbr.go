@@ -2,9 +2,11 @@ package pbr
 
 import (
 	"bytes"
+	"fmt"
 	"go/ast"
 	"go/printer"
 	"go/token"
+	"go/types"
 	"io"
 	"log"
 	"os"
@@ -63,6 +65,7 @@ func Load() error {
 				if !ok {
 					continue
 				}
+
 				buildCall, err := findInjectorBuild(pkg.TypesInfo, fn)
 				if err != nil {
 					println("findInjectorBuild error", err.Error())
@@ -75,16 +78,24 @@ func Load() error {
 				println("found injector @ func", fn.Name.Name)
 
 				// func args
-				for _, fnArg := range fn.Type.Params.List {
-					fao := pkg.TypesInfo.ObjectOf(fnArg.Names[0]) // TODO: check when will Names length > 0
+				// for _, fnArg := range fn.Type.Params.List {
+				// 	fao := pkg.TypesInfo.ObjectOf(fnArg.Names[0]) // x, y int = [x y]
 
-					// TODO: check parent type
-					// pkg.TypesInfo.TypeOf(fnArg.Type)
-					println("fnarg")
-					println(fao.Pkg().Name())
-					println(fao.Type().String())
-					println(pkg.TypesInfo.TypeOf(fnArg.Type).String())
-				}
+				// 	// TODO: check parent type
+				// 	println("fnarg", fao.Name())
+				// 	println(fao.Pkg().Name())
+				// 	println(fao.Type().String())
+				// 	println(pkg.TypesInfo.TypeOf(fnArg.Type).String())
+				// 	println(fao.Type().Underlying().String())
+
+				// 	printType(fao.Type(), types.RelativeTo(pkg.Types))
+
+				// 	if s, ok := fao.Type().Underlying().(*types.Struct); ok {
+				// 		println("is struct!", s.String())
+				// 	}
+
+				// 	println("====")
+				// }
 
 				// println("comment", fn.Doc.Text())
 				println("call pos", pkg.Fset.Position(buildCall.Pos()).Offset, pkg.Fset.Position(buildCall.End()).Offset)
@@ -93,6 +104,11 @@ func Load() error {
 				for _, arg := range buildCall.Args {
 					println("call arg type", pkg.TypesInfo.TypeOf(arg).String())
 					println("call arg underlying type", pkg.TypesInfo.TypeOf(arg).Underlying().String())
+
+					fmt.Printf("arg: %T", arg)
+
+					o := qualifiedIdentObject(pkg.TypesInfo, arg)
+					fmt.Printf("o: %s", o.Type().String())
 				}
 
 				if fn.Doc != nil {
@@ -101,7 +117,31 @@ func Load() error {
 					println("fn pos", pkg.Fset.Position(fn.Pos()).Offset)
 				}
 
+				// printAST(pkg.Fset, fn)
+				sig := pkg.TypesInfo.ObjectOf(fn.Name).Type().(*types.Signature)
+				// printAST(pkg.Fset, sig.Params().String())
+				println("param", types.TypeString(sig.Params().At(0).Type(), types.RelativeTo(pkg.Types)))
+
+				println(
+					pkg.Fset.Position(fn.Type.Params.Pos()).String(),
+					pkg.Fset.Position(fn.Type.Params.End()).String(),
+
+					pkg.Fset.Position(fn.Recv.Pos()).String(),
+					pkg.Fset.Position(fn.Recv.End()).String(),
+				)
+
+				// pkg.Fset.File(fn.Recv.Pos())
+
+				rcv := fn.Recv
+				println(rcv)
+				pkg.Fset.File(fn.Recv.Pos()).Name()
+
 				printAST(pkg.Fset, fn)
+
+				// Recv? > Name > Type > Body
+
+				// fn.Type.Params
+				// astutil.Apply()
 
 				println("body.list")
 				for _, stmt := range fn.Body.List {
@@ -123,5 +163,11 @@ func printAST(fset *token.FileSet, node interface{}) {
 	if err := printer.Fprint(io.Writer(&buf), fset, node); err != nil {
 		panic(err)
 	}
+	println(buf.String())
+}
+
+func printType(typ types.Type, q types.Qualifier) {
+	var buf bytes.Buffer
+	types.WriteType(&buf, typ, q)
 	println(buf.String())
 }
