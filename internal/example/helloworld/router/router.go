@@ -1,7 +1,5 @@
 //go:build pbrinject
 
-//The build tag makes sure the stub is not built in the final build.
-
 package router
 
 import (
@@ -9,15 +7,11 @@ import (
 	"github.com/serkodev/pbr"
 )
 
-type tts struct {
-	a int
+// gin.RouterGroup
+func Build(r *gin.Engine) {
+	pbr.Build(r)
 }
 
-//wtf
-
-//go:generate echo "start gen pbr..."
-////go:generate go run github.com/serkodev/pbr
-//go:generate $HOME/go/bin/pbr
 func Run() {
 	rrrrrr := gin.Default()
 
@@ -25,8 +19,7 @@ func Run() {
 	// about.GET(r)
 	// xx.GET(r)
 
-	// b := tts{a: 123}
-	pbr.Build(rrrrrr)
+	Build(rrrrrr)
 
 	rrrrrr.Run()
 }

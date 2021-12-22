@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"go/ast"
 	"go/printer"
+	"go/token"
 	"io"
 	"log"
 	"os"
@@ -42,7 +43,7 @@ func Load() error {
 
 		// list import
 		for _, i := range pkg.Types.Imports() {
-			println("import", i.Path)
+			println("import", i.Path())
 		}
 
 		// for _, f := range pkg.Syntax {
@@ -62,8 +63,6 @@ func Load() error {
 				if !ok {
 					continue
 				}
-
-				println("found function", fn.Name.Name)
 				buildCall, err := findInjectorBuild(pkg.TypesInfo, fn)
 				if err != nil {
 					println("findInjectorBuild error", err.Error())
@@ -73,13 +72,27 @@ func Load() error {
 					continue
 				}
 
+				println("found injector @ func", fn.Name.Name)
+
+				// func args
+				for _, fnArg := range fn.Type.Params.List {
+					fao := pkg.TypesInfo.ObjectOf(fnArg.Names[0]) // TODO: check when will Names length > 0
+
+					// TODO: check parent type
+					// pkg.TypesInfo.TypeOf(fnArg.Type)
+					println("fnarg")
+					println(fao.Pkg().Name())
+					println(fao.Type().String())
+					println(pkg.TypesInfo.TypeOf(fnArg.Type).String())
+				}
+
 				// println("comment", fn.Doc.Text())
 				println("call pos", pkg.Fset.Position(buildCall.Pos()).Offset, pkg.Fset.Position(buildCall.End()).Offset)
 
 				println("checking args...")
 				for _, arg := range buildCall.Args {
-					t := pkg.TypesInfo.TypeOf(arg).String()
-					println("call arg type", t)
+					println("call arg type", pkg.TypesInfo.TypeOf(arg).String())
+					println("call arg underlying type", pkg.TypesInfo.TypeOf(arg).Underlying().String())
 				}
 
 				if fn.Doc != nil {
@@ -88,15 +101,27 @@ func Load() error {
 					println("fn pos", pkg.Fset.Position(fn.Pos()).Offset)
 				}
 
-				// print function, ref: wire.go writeAST rewritePkgRefs
-				var buf bytes.Buffer
-				if err := printer.Fprint(io.Writer(&buf), pkg.Fset, fn); err != nil {
-					panic(err)
+				printAST(pkg.Fset, fn)
+
+				println("body.list")
+				for _, stmt := range fn.Body.List {
+					println("===")
+					printAST(pkg.Fset, stmt)
 				}
-				println("printer", buf.String())
+
+				// fn.Type.Params
 			}
 		}
 	}
 
 	return nil
+}
+
+func printAST(fset *token.FileSet, node interface{}) {
+	// print function, ref: wire.go writeAST rewritePkgRefs
+	var buf bytes.Buffer
+	if err := printer.Fprint(io.Writer(&buf), fset, node); err != nil {
+		panic(err)
+	}
+	println(buf.String())
 }

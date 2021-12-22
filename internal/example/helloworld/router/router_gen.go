@@ -4,16 +4,17 @@
 package router
 
 import (
-	xx "example.com/foo/router/_id"
-	"example.com/foo/router/about"
 	"github.com/gin-gonic/gin"
 )
 
+// TODO: route callback
+func Build(r *gin.Engine) {
+	r.GET("about/a")
+	r.GET("about/b")
+}
+
 func Run() {
 	router := gin.Default()
-
-	about.GET("123")
-	xx.GET("123")
-
+	Build(router)
 	router.Run()
 }
