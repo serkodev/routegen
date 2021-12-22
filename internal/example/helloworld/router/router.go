@@ -10,9 +10,7 @@ import (
 type bty interface {
 }
 
-// allow pbr.Build() call only
-/* hi */
-func (b *bty) Build(r *gin.Engine) /*hi*/ (bb /*on9*/ *gin.Engine, err error) { // gin.RouterGroup
+func Build(r *gin.Engine) { // gin.RouterGroup
 	pbr.Build(r)
 	println("hihi")
 }

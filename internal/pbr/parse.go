@@ -8,8 +8,6 @@ import (
 )
 
 func isWireImport(path string) bool {
-	println("isWireImport", path)
-
 	// TODO(light): This is depending on details of the current loader.
 	const vendorPart = "vendor/"
 	if i := strings.LastIndex(path, vendorPart); i != -1 && (i == 0 || path[i-1] == '/') {

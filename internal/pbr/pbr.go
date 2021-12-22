@@ -60,6 +60,7 @@ func Load() error {
 		// }
 
 		for _, f := range pkg.Syntax {
+
 			for _, decl := range f.Decls {
 				fn, ok := decl.(*ast.FuncDecl)
 				if !ok {
@@ -76,26 +77,6 @@ func Load() error {
 				}
 
 				println("found injector @ func", fn.Name.Name)
-
-				// func args
-				// for _, fnArg := range fn.Type.Params.List {
-				// 	fao := pkg.TypesInfo.ObjectOf(fnArg.Names[0]) // x, y int = [x y]
-
-				// 	// TODO: check parent type
-				// 	println("fnarg", fao.Name())
-				// 	println(fao.Pkg().Name())
-				// 	println(fao.Type().String())
-				// 	println(pkg.TypesInfo.TypeOf(fnArg.Type).String())
-				// 	println(fao.Type().Underlying().String())
-
-				// 	printType(fao.Type(), types.RelativeTo(pkg.Types))
-
-				// 	if s, ok := fao.Type().Underlying().(*types.Struct); ok {
-				// 		println("is struct!", s.String())
-				// 	}
-
-				// 	println("====")
-				// }
 
 				// println("comment", fn.Doc.Text())
 				println("call pos", pkg.Fset.Position(buildCall.Pos()).Offset, pkg.Fset.Position(buildCall.End()).Offset)
@@ -117,28 +98,10 @@ func Load() error {
 					println("fn pos", pkg.Fset.Position(fn.Pos()).Offset)
 				}
 
-				// printAST(pkg.Fset, fn)
-				sig := pkg.TypesInfo.ObjectOf(fn.Name).Type().(*types.Signature)
-				// printAST(pkg.Fset, sig.Params().String())
-				println("param", types.TypeString(sig.Params().At(0).Type(), types.RelativeTo(pkg.Types)))
-
-				println(
-					pkg.Fset.Position(fn.Type.Params.Pos()).String(),
-					pkg.Fset.Position(fn.Type.Params.End()).String(),
-
-					pkg.Fset.Position(fn.Recv.Pos()).String(),
-					pkg.Fset.Position(fn.Recv.End()).String(),
-				)
-
-				// pkg.Fset.File(fn.Recv.Pos())
-
-				rcv := fn.Recv
-				println(rcv)
-				pkg.Fset.File(fn.Recv.Pos()).Name()
+				header, _ := getFuncHeader(pkg, fn)
+				println(header)
 
 				printAST(pkg.Fset, fn)
-
-				// Recv? > Name > Type > Body
 
 				// fn.Type.Params
 				// astutil.Apply()
@@ -170,4 +133,54 @@ func printType(typ types.Type, q types.Qualifier) {
 	var buf bytes.Buffer
 	types.WriteType(&buf, typ, q)
 	println(buf.String())
+}
+
+func getFuncHeader(pkg *packages.Package, fn *ast.FuncDecl) (string, error) {
+	// format: func Recv? > Name > Param > Results? { Body }
+
+	// receiver (or nil)
+	var recv string
+	if fn.Recv != nil {
+		if r, err := readTokenFromPkgFile(pkg, fn.Recv.Pos(), fn.Recv.End()); err == nil {
+			recv = r + " "
+		}
+	}
+
+	// params (non-nil)
+	params, _ := readTokenFromPkgFile(pkg, fn.Type.Params.Pos(), fn.Type.Params.End())
+
+	// results (or nil)
+	var results string
+	if fn.Type.Results != nil {
+		if r, err := readTokenFromPkgFile(pkg, fn.Type.Results.Pos(), fn.Type.Results.End()); err == nil {
+			results = " " + r
+		}
+	}
+
+	return fmt.Sprintf("func %s%s%s%s", recv, fn.Name.Name, params, results), nil
+}
+
+// TODO: need improve performance, reading from file maybe is not a good idea
+func readTokenFromPkgFile(pkg *packages.Package, pos token.Pos, end token.Pos) (string, error) {
+	f := pkg.Fset.File(pos)
+	p := f.Position(pos)
+	e := f.Position(end)
+
+	gf, err := os.Open(f.Name())
+	if err != nil {
+		return "", err
+	}
+	defer gf.Close()
+
+	// seek pos and read go file
+	slen := e.Offset - p.Offset
+	buf := make([]byte, slen)
+	gf.Seek(int64(p.Offset), 0)
+	if n, err := gf.Read(buf); err != nil {
+		return "", err
+	} else if n != slen {
+		return "", fmt.Errorf("read token error")
+	}
+
+	return string(buf), nil
 }
