@@ -99,9 +99,9 @@ func Load() error {
 				}
 
 				header, _ := getFuncHeader(pkg, fn)
-				println(header)
+				println("header", header)
 
-				printAST(pkg.Fset, fn)
+				// printAST(pkg.Fset, fn)
 
 				// fn.Type.Params
 				// astutil.Apply()
@@ -137,27 +137,10 @@ func printType(typ types.Type, q types.Qualifier) {
 
 func getFuncHeader(pkg *packages.Package, fn *ast.FuncDecl) (string, error) {
 	// format: func Recv? > Name > Param > Results? { Body }
-
-	// receiver (or nil)
-	var recv string
-	if fn.Recv != nil {
-		if r, err := readTokenFromPkgFile(pkg, fn.Recv.Pos(), fn.Recv.End()); err == nil {
-			recv = r + " "
-		}
+	if fn.Type.Func == token.NoPos {
+		return "", fmt.Errorf("cannot generate func header, invalid Type.Func")
 	}
-
-	// params (non-nil)
-	params, _ := readTokenFromPkgFile(pkg, fn.Type.Params.Pos(), fn.Type.Params.End())
-
-	// results (or nil)
-	var results string
-	if fn.Type.Results != nil {
-		if r, err := readTokenFromPkgFile(pkg, fn.Type.Results.Pos(), fn.Type.Results.End()); err == nil {
-			results = " " + r
-		}
-	}
-
-	return fmt.Sprintf("func %s%s%s%s", recv, fn.Name.Name, params, results), nil
+	return readTokenFromPkgFile(pkg, fn.Type.Func, fn.Type.End())
 }
 
 // TODO: need improve performance, reading from file maybe is not a good idea
@@ -174,13 +157,17 @@ func readTokenFromPkgFile(pkg *packages.Package, pos token.Pos, end token.Pos) (
 
 	// seek pos and read go file
 	slen := e.Offset - p.Offset
+	if slen < 0 {
+		return "", fmt.Errorf("invalid token pos")
+	}
 	buf := make([]byte, slen)
-	gf.Seek(int64(p.Offset), 0)
+	if _, err = gf.Seek(int64(p.Offset), 0); err != nil {
+		return "", err
+	}
 	if n, err := gf.Read(buf); err != nil {
 		return "", err
 	} else if n != slen {
 		return "", fmt.Errorf("read token error")
 	}
-
 	return string(buf), nil
 }
