@@ -103,10 +103,15 @@ func Load() error {
 
 				// printAST(pkg.Fset, fn)
 
-				// fn.Type.Params
-				// astutil.Apply()
+				// TODO: use inspect to loop inside function
+				ast.Inspect(fn.Body, func(n ast.Node) bool {
+					fmt.Printf("inspect: %T\n", n)
+					return true
+				})
 
+				// TODO use fn.Body.Lbrace, fn.Body.Rbrace to calculate offset
 				println("body.list")
+				// fn.Body.
 				for _, stmt := range fn.Body.List {
 					println("===")
 					printAST(pkg.Fset, stmt)
