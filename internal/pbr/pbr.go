@@ -44,9 +44,9 @@ func Load() error {
 		println("path", pkg.PkgPath)
 
 		// list import
-		for _, i := range pkg.Types.Imports() {
-			println("import", i.Path())
-		}
+		// for _, i := range pkg.Types.Imports() {
+		// 	println("import", i.Path())
+		// }
 
 		// for _, f := range pkg.Syntax {
 		// 	for _, sx := range f.Decls {
@@ -60,6 +60,7 @@ func Load() error {
 		// }
 
 		for _, f := range pkg.Syntax {
+			buildFuncs := make(map[ast.Decl]bool)
 
 			for _, decl := range f.Decls {
 				fn, ok := decl.(*ast.FuncDecl)
@@ -76,48 +77,82 @@ func Load() error {
 					continue
 				}
 
-				println("found injector @ func", fn.Name.Name)
+				// buildFuncs = append(buildFuncs, fn)
+				buildFuncs[fn] = true
+			}
 
-				// println("comment", fn.Doc.Text())
-				println("call pos", pkg.Fset.Position(buildCall.Pos()).Offset, pkg.Fset.Position(buildCall.End()).Offset)
-
-				println("checking args...")
-				for _, arg := range buildCall.Args {
-					println("call arg type", pkg.TypesInfo.TypeOf(arg).String())
-					println("call arg underlying type", pkg.TypesInfo.TypeOf(arg).Underlying().String())
-
-					fmt.Printf("arg: %T", arg)
-
-					o := qualifiedIdentObject(pkg.TypesInfo, arg)
-					fmt.Printf("o: %s", o.Type().String())
+			if len(buildFuncs) > 0 {
+				for _, decl := range f.Decls {
+					if buildFuncs[decl] {
+						println("===== decl =====")
+						findInject(pkg, decl.(*ast.FuncDecl))
+					} else {
+						println("===== copy =====")
+						printAST(pkg.Fset, decl)
+					}
 				}
-
-				if fn.Doc != nil {
-					println("fn pos (comment)", pkg.Fset.Position(fn.Doc.Pos()).Offset)
-				} else {
-					println("fn pos", pkg.Fset.Position(fn.Pos()).Offset)
-				}
-
-				header, _ := getFuncHeader(pkg, fn)
-				println(header)
-
-				printAST(pkg.Fset, fn)
-
-				// fn.Type.Params
-				// astutil.Apply()
-
-				println("body.list")
-				for _, stmt := range fn.Body.List {
-					println("===")
-					printAST(pkg.Fset, stmt)
-				}
-
-				// fn.Type.Params
 			}
 		}
 	}
 
 	return nil
+}
+
+func findInject(pkg *packages.Package, fn *ast.FuncDecl) (string, error) {
+	header, _ := getFuncHeader(pkg, fn)
+	println(header, "{")
+
+	for _, stmt := range fn.Body.List {
+		if ij := getInjectorStmt(pkg.TypesInfo, stmt); ij != nil {
+			println("=== !! replace !! ===")
+		} else {
+			printAST(pkg.Fset, stmt)
+		}
+	}
+	println("}")
+
+	return "", nil
+}
+
+func inject(pkg *packages.Package, fn *ast.FuncDecl, call *ast.CallExpr) {
+
+	println("found injector @ func", fn.Name.Name)
+
+	// println("comment", fn.Doc.Text())
+	println("call pos", pkg.Fset.Position(call.Pos()).Offset, pkg.Fset.Position(call.End()).Offset)
+
+	println("checking args...")
+	for _, arg := range call.Args {
+		println("call arg type", pkg.TypesInfo.TypeOf(arg).String())
+		println("call arg underlying type", pkg.TypesInfo.TypeOf(arg).Underlying().String())
+
+		fmt.Printf("arg: %T", arg)
+
+		o := qualifiedIdentObject(pkg.TypesInfo, arg)
+		fmt.Printf("o: %s", o.Type().String())
+	}
+
+	if fn.Doc != nil {
+		println("fn pos (comment)", pkg.Fset.Position(fn.Doc.Pos()).Offset)
+	} else {
+		println("fn pos", pkg.Fset.Position(fn.Pos()).Offset)
+	}
+
+	header, _ := getFuncHeader(pkg, fn)
+	println(header)
+
+	printAST(pkg.Fset, fn)
+
+	// fn.Type.Params
+	// astutil.Apply()
+
+	println("body.list")
+	for _, stmt := range fn.Body.List {
+		println("===")
+		printAST(pkg.Fset, stmt)
+	}
+
+	// fn.Type.Params
 }
 
 func printAST(fset *token.FileSet, node interface{}) {
