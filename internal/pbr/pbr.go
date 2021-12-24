@@ -11,6 +11,7 @@ import (
 	"log"
 	"os"
 
+	"golang.org/x/tools/go/ast/astutil"
 	"golang.org/x/tools/go/packages"
 )
 
@@ -102,13 +103,62 @@ func findInject(pkg *packages.Package, fn *ast.FuncDecl) (string, error) {
 	header, _ := getFuncHeader(pkg, fn)
 	println(header, "{")
 
-	for _, stmt := range fn.Body.List {
-		if ij := getInjectorStmt(pkg.TypesInfo, stmt); ij != nil {
-			println("=== !! replace !! ===")
-		} else {
-			printAST(pkg.Fset, stmt)
+	// ast.Inspect(fn.Body, func(node ast.Node) bool {
+	// 	if node != nil {
+	// 		printAST(pkg.Fset, node)
+	// 	}
+	// 	return true
+	// })
+
+	printAST(pkg.Fset, fn.Body)
+
+	astutil.Apply(fn.Body, func(c *astutil.Cursor) bool {
+		if stmt, ok := c.Node().(ast.Stmt); ok {
+			if s := getInjectorStmt(pkg.TypesInfo, stmt); s != nil {
+
+				id := s.Args[0].(*ast.Ident)
+
+				newCallStmt := &ast.ExprStmt{
+					X: &ast.CallExpr{
+						Fun: &ast.SelectorExpr{
+							X: id,
+							Sel: &ast.Ident{
+								Name: "foo",
+							},
+						},
+						Args: []ast.Expr{
+							&ast.BasicLit{
+								Kind:  token.STRING,
+								Value: `"bar"`,
+							},
+							&ast.BasicLit{
+								Kind:  token.IDENT,
+								Value: "baz",
+							},
+						},
+					},
+				}
+
+				println("yes!!")
+				// c.Replace()
+				c.InsertBefore(newCallStmt)
+				c.InsertBefore(newCallStmt)
+				c.Delete()
+			}
 		}
-	}
+		return true
+	}, nil)
+
+	printAST(pkg.Fset, fn.Body)
+
+	// for _, stmt := range fn.Body.List {
+	// 	if ij := getInjectorStmt(pkg.TypesInfo, stmt); ij != nil {
+	// 		println("=== !! replace !! ===")
+	// 	} else {
+	// 		printAST(pkg.Fset, stmt)
+	// 	}
+	// }
+
 	println("}")
 
 	return "", nil
