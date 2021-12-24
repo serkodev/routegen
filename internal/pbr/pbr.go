@@ -11,6 +11,7 @@ import (
 	"log"
 	"os"
 
+	"golang.org/x/tools/go/ast/astutil"
 	"golang.org/x/tools/go/packages"
 )
 
@@ -44,9 +45,9 @@ func Load() error {
 		println("path", pkg.PkgPath)
 
 		// list import
-		for _, i := range pkg.Types.Imports() {
-			println("import", i.Path())
-		}
+		// for _, i := range pkg.Types.Imports() {
+		// 	println("import", i.Path())
+		// }
 
 		// for _, f := range pkg.Syntax {
 		// 	for _, sx := range f.Decls {
@@ -60,6 +61,7 @@ func Load() error {
 		// }
 
 		for _, f := range pkg.Syntax {
+			buildFuncs := make(map[ast.Decl]bool)
 
 			for _, decl := range f.Decls {
 				fn, ok := decl.(*ast.FuncDecl)
@@ -76,53 +78,130 @@ func Load() error {
 					continue
 				}
 
-				println("found injector @ func", fn.Name.Name)
+				// buildFuncs = append(buildFuncs, fn)
+				buildFuncs[fn] = true
+			}
 
-				// println("comment", fn.Doc.Text())
-				println("call pos", pkg.Fset.Position(buildCall.Pos()).Offset, pkg.Fset.Position(buildCall.End()).Offset)
-
-				println("checking args...")
-				for _, arg := range buildCall.Args {
-					println("call arg type", pkg.TypesInfo.TypeOf(arg).String())
-					println("call arg underlying type", pkg.TypesInfo.TypeOf(arg).Underlying().String())
-
-					fmt.Printf("arg: %T", arg)
-
-					o := qualifiedIdentObject(pkg.TypesInfo, arg)
-					fmt.Printf("o: %s", o.Type().String())
+			if len(buildFuncs) > 0 {
+				for _, decl := range f.Decls {
+					if buildFuncs[decl] {
+						println("===== decl =====")
+						findInject(pkg, decl.(*ast.FuncDecl))
+					} else {
+						println("===== copy =====")
+						printAST(pkg.Fset, decl)
+					}
 				}
-
-				if fn.Doc != nil {
-					println("fn pos (comment)", pkg.Fset.Position(fn.Doc.Pos()).Offset)
-				} else {
-					println("fn pos", pkg.Fset.Position(fn.Pos()).Offset)
-				}
-
-				header, _ := getFuncHeader(pkg, fn)
-				println("header", header)
-
-				// printAST(pkg.Fset, fn)
-
-				// TODO: use inspect to loop inside function
-				ast.Inspect(fn.Body, func(n ast.Node) bool {
-					fmt.Printf("inspect: %T\n", n)
-					return true
-				})
-
-				// TODO use fn.Body.Lbrace, fn.Body.Rbrace to calculate offset
-				println("body.list")
-				// fn.Body.
-				for _, stmt := range fn.Body.List {
-					println("===")
-					printAST(pkg.Fset, stmt)
-				}
-
-				// fn.Type.Params
 			}
 		}
 	}
 
 	return nil
+}
+
+func findInject(pkg *packages.Package, fn *ast.FuncDecl) (string, error) {
+	header, _ := getFuncHeader(pkg, fn)
+	println(header, "{")
+
+	// ast.Inspect(fn.Body, func(node ast.Node) bool {
+	// 	if node != nil {
+	// 		printAST(pkg.Fset, node)
+	// 	}
+	// 	return true
+	// })
+
+	printAST(pkg.Fset, fn.Body)
+
+	astutil.Apply(fn.Body, func(c *astutil.Cursor) bool {
+		if stmt, ok := c.Node().(ast.Stmt); ok {
+			if s := getInjectorStmt(pkg.TypesInfo, stmt); s != nil {
+
+				id := s.Args[0].(*ast.Ident)
+
+				newCallStmt := &ast.ExprStmt{
+					X: &ast.CallExpr{
+						Fun: &ast.SelectorExpr{
+							X: id,
+							Sel: &ast.Ident{
+								Name: "foo",
+							},
+						},
+						Args: []ast.Expr{
+							&ast.BasicLit{
+								Kind:  token.STRING,
+								Value: `"bar"`,
+							},
+							&ast.BasicLit{
+								Kind:  token.IDENT,
+								Value: "baz",
+							},
+						},
+					},
+				}
+
+				println("yes!!")
+				// c.Replace()
+				c.InsertBefore(newCallStmt)
+				c.InsertBefore(newCallStmt)
+				c.Delete()
+			}
+		}
+		return true
+	}, nil)
+
+	printAST(pkg.Fset, fn.Body)
+
+	// for _, stmt := range fn.Body.List {
+	// 	if ij := getInjectorStmt(pkg.TypesInfo, stmt); ij != nil {
+	// 		println("=== !! replace !! ===")
+	// 	} else {
+	// 		printAST(pkg.Fset, stmt)
+	// 	}
+	// }
+
+	println("}")
+
+	return "", nil
+}
+
+func inject(pkg *packages.Package, fn *ast.FuncDecl, call *ast.CallExpr) {
+	println("found injector @ func", fn.Name.Name)
+
+	// println("comment", fn.Doc.Text())
+	println("call pos", pkg.Fset.Position(call.Pos()).Offset, pkg.Fset.Position(call.End()).Offset)
+
+	println("checking args...")
+	for _, arg := range call.Args {
+		println("call arg type", pkg.TypesInfo.TypeOf(arg).String())
+		println("call arg underlying type", pkg.TypesInfo.TypeOf(arg).Underlying().String())
+
+		fmt.Printf("arg: %T", arg)
+
+		o := qualifiedIdentObject(pkg.TypesInfo, arg)
+		fmt.Printf("o: %s", o.Type().String())
+	}
+
+	if fn.Doc != nil {
+		println("fn pos (comment)", pkg.Fset.Position(fn.Doc.Pos()).Offset)
+	} else {
+		println("fn pos", pkg.Fset.Position(fn.Pos()).Offset)
+	}
+
+	header, _ := getFuncHeader(pkg, fn)
+	println(header)
+
+	printAST(pkg.Fset, fn)
+
+	// fn.Type.Params
+	// astutil.Apply()
+
+	println("body.list")
+	for _, stmt := range fn.Body.List {
+		println("===")
+		printAST(pkg.Fset, stmt)
+	}
+
+	// fn.Type.Params
 }
 
 func printAST(fset *token.FileSet, node interface{}) {
