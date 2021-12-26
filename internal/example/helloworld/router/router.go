@@ -11,12 +11,11 @@ type bty interface {
 }
 
 func Build(r *gin.Engine) { // gin.RouterGroup
-	pbr.Build(r)
 	a := 2
+	pbr.Build(r)
 	if a > 1 {
 		pbr.Build(r)
 	}
-	println("hihi")
 }
 
 func Run() {
