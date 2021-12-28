@@ -3,6 +3,8 @@
 package router
 
 import (
+	xx "example.com/foo/router/api/post"
+
 	"github.com/gin-gonic/gin"
 	"github.com/serkodev/pbr"
 )
@@ -10,12 +12,8 @@ import (
 type bty interface {
 }
 
-func Build(r *gin.Engine) { // gin.RouterGroup
-	a := 2
-	pbr.Build(r)
-	if a > 1 {
-		pbr.Build(r)
-	}
+func Build(g *gin.Engine) { // gin.RouterGroup
+	pbr.Build(g)
 }
 
 func Run() {

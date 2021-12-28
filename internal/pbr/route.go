@@ -9,17 +9,35 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
-type PkgRoute struct {
+type RouteSels = map[string][]string
+
+type RoutePackage struct {
 	RelativePath string
 	PkgPath      string
-	Sels         []string
+	Handles      RouteSels
 }
 
-var targetSels = []string{"GET", "POST", "HANDLE"}
+type routeGen struct {
+	sels map[string]struct{}
+}
 
-func parseRoute(root string) []*PkgRoute {
+func newRouteGen() *routeGen {
+	r := &routeGen{}
+
+	// target selectors
+	var targetSels = []string{"GET", "POST", "HANDLE"}
+	set := make(map[string]struct{}, len(targetSels))
+	for _, s := range targetSels {
+		set[s] = struct{}{}
+	}
+	r.sels = set
+
+	return r
+}
+
+func (r *routeGen) parseRoute(root string) []*RoutePackage {
 	println("root", root)
-	var routes []*PkgRoute
+	var routes []*RoutePackage
 
 	filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if info.IsDir() {
@@ -39,11 +57,11 @@ func parseRoute(root string) []*PkgRoute {
 			}
 
 			for _, pkg := range pkgs {
-				if sels := processPkgRouteSels(pkg); len(sels) > 0 {
-					routes = append(routes, &PkgRoute{
+				if sels := r.processPkgRouteSels(pkg); len(sels) > 0 {
+					routes = append(routes, &RoutePackage{
 						RelativePath: rel,
 						PkgPath:      pkg.PkgPath,
-						Sels:         sels,
+						Handles:      sels,
 					})
 				}
 			}
@@ -55,16 +73,54 @@ func parseRoute(root string) []*PkgRoute {
 	return routes
 }
 
-func processPkgRouteSels(pkg *packages.Package) []string {
-	var sels []string
+func (r *routeGen) processPkgRouteSels(pkg *packages.Package) RouteSels {
+	// if pkg.PkgPath != "example.com/foo/router/api/post" {
+	// 	return []string{}
+	// }
+
+	var sels = make(RouteSels)
 	for _, f := range pkg.Syntax {
-		for _, sel := range targetSels {
-			if o := f.Scope.Lookup(sel); o != nil {
-				if _, ok := o.Decl.(*ast.FuncDecl); ok {
-					sels = append(sels, sel)
+		// fmt.Printf("routes: %v\n", f.Scope.String())
+		// ast.Print(pkg.Fset, f)
+
+		ast.Inspect(f, func(n ast.Node) bool {
+			if fd, ok := n.(*ast.FuncDecl); ok {
+				sel := fd.Name.Name
+
+				rt := r.getFuncRecvType(fd)
+				if rt != nil {
+					// TODO: handle with recv
+				} else {
+					if r.isTargetSelector(sel) {
+						sels[""] = append(sels[""], sel)
+					}
+					fmt.Println("func", fd.Name, pkg.PkgPath)
 				}
 			}
-		}
+			return true
+		})
 	}
 	return sels
+}
+
+func (r *routeGen) getFuncRecvType(fd *ast.FuncDecl) *ast.Ident {
+	if fd.Recv == nil || len(fd.Recv.List) != 1 {
+		return nil
+	}
+
+	switch recvType := fd.Recv.List[0].Type.(type) {
+	case *ast.Ident:
+		return recvType
+	case *ast.StarExpr:
+		if rt, ok := recvType.X.(*ast.Ident); ok {
+			return rt
+		}
+	}
+
+	return nil
+}
+
+func (r *routeGen) isTargetSelector(sel string) bool {
+	_, ok := r.sels[sel]
+	return ok
 }

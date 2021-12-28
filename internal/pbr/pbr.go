@@ -1,19 +1,26 @@
 package pbr
 
 import (
-	"bytes"
 	"fmt"
 	"go/ast"
-	"go/format"
 	"go/parser"
 	"go/token"
-	"go/types"
-	"io"
 	"os"
 
 	"golang.org/x/tools/go/ast/astutil"
 	"golang.org/x/tools/go/packages"
 )
+
+type gen struct {
+	pkg       *packages.Package
+	buildFunc map[*ast.FuncDecl]bool
+}
+
+func newGen(pkg *packages.Package) *gen {
+	return &gen{
+		pkg: pkg,
+	}
+}
 
 func Load() error {
 	wd, err := os.Getwd()
@@ -23,7 +30,8 @@ func Load() error {
 	}
 	fmt.Println(wd)
 
-	parseRoute(wd)
+	r := newRouteGen()
+	_ = r.parseRoute(wd)
 
 	cfg := &packages.Config{
 		// Context:    ctx,
@@ -46,54 +54,29 @@ func Load() error {
 	for _, pkg := range pkgs {
 		fmt.Println("path", pkg.PkgPath)
 
-		// list import
-		// for _, i := range pkg.Types.Imports() {
-		// 	fmt.Println("import", i.Path())
-		// }
-
-		// for _, f := range pkg.Syntax {
-		// 	for _, sx := range f.Decls {
-		// 		var buf bytes.Buffer
-		// 		if err := printer.Fprint(io.Writer(&buf), pkg.Fset, sx); err != nil {
-		// 			panic(err)
-		// 		}
-		// 		fmt.Println("printer =====")
-		// 		fmt.Println(buf.String())
-		// 	}
-		// }
-
 		for _, f := range pkg.Syntax {
-			buildFuncs := make(map[ast.Decl]bool)
+			buildFuncs := make(map[*ast.FuncDecl]bool)
 
-			for _, decl := range f.Decls {
-				fn, ok := decl.(*ast.FuncDecl)
+			astutil.Apply(f, func(c *astutil.Cursor) bool {
+				fn, ok := c.Node().(*ast.FuncDecl)
 				if !ok {
-					continue
+					return true
 				}
-
-				buildCall, err := findInjectorBuild(pkg.TypesInfo, fn)
-				if err != nil {
+				if buildCall, err := findInjectorBuild(pkg.TypesInfo, fn); err != nil {
 					fmt.Println("findInjectorBuild error", err.Error())
-					continue
+					return true
+				} else if buildCall != nil {
+					// inject build found
+					buildFuncs[fn] = true
 				}
-				if buildCall == nil {
-					continue
-				}
-
-				// buildFuncs = append(buildFuncs, fn)
-				buildFuncs[fn] = true
-			}
+				return true
+			}, nil)
 
 			if len(buildFuncs) > 0 {
-				for _, decl := range f.Decls {
-					if buildFuncs[decl] {
-						fmt.Println("===== decl =====")
-						findInject(pkg, decl.(*ast.FuncDecl), f)
-					} else {
-						fmt.Println("===== copy =====")
-						printAST(pkg.Fset, decl)
-					}
-				}
+				fmt.Println("found pbr.Build", pkg.Fset.File(f.Pos()).Name())
+				g := newGen(pkg)
+				g.buildFunc = buildFuncs
+				g.inject(f)
 			}
 		}
 	}
@@ -101,21 +84,60 @@ func Load() error {
 	return nil
 }
 
-func findInject(pkg *packages.Package, fn *ast.FuncDecl, ff *ast.File) (string, error) {
-	header, _ := getFuncHeader(pkg, fn)
-	fmt.Println(header)
+func (g *gen) canUseImportName(name string) bool {
+	for fn := range g.buildFunc {
+		_, o := g.pkg.TypesInfo.Scopes[fn.Type].LookupParent(name, token.NoPos)
+		if o != nil {
+			return false
+		}
+	}
+	return true
+}
 
-	// ast.Inspect(fn.Body, func(node ast.Node) bool {
-	// 	if node != nil {
-	// 		printAST(pkg.Fset, node)
-	// 	}
-	// 	return true
-	// })
+func (g *gen) generate(f *ast.File) {
+	fmt.Println("generate", g.pkg.Fset.File(f.Pos()).Name())
+
+	// printAST(g.pkg.Fset, f)
+	for _, decl := range f.Decls {
+		printAST(g.pkg.Fset, decl)
+		fmt.Print("\n")
+	}
+}
+
+func (g *gen) inject(f *ast.File) {
+	// TODO: import fmt.Println("r", g.canUseImportName("r"))
+
+	astutil.Apply(f, func(c *astutil.Cursor) bool {
+		if _, ok := c.Node().(*ast.ImportSpec); ok {
+
+			//if gen.Tok == token.IMPORT {
+			//	fmt.Println("import token")
+			//	}
+			c.InsertAfter(&ast.ImportSpec{
+				Path: &ast.BasicLit{
+					Kind:  token.STRING,
+					Value: "\"abc\"",
+				},
+				Name: ast.NewIdent("wtf"),
+			})
+		} else if fn, ok := c.Node().(*ast.FuncDecl); ok && g.buildFunc[fn] {
+			fmt.Println("===== decl =====")
+			g.injectFunction(fn)
+		}
+		return true
+	}, nil)
+
+	g.generate(f)
+}
+
+func (g *gen) injectFunction(fn *ast.FuncDecl) (string, error) {
+	header, _ := getFuncHeader(g.pkg, fn)
+	fmt.Println(header)
 
 	astutil.Apply(fn.Body, func(c *astutil.Cursor) bool {
 		if stmt, ok := c.Node().(ast.Stmt); ok {
-			if s := getInjectorStmt(pkg.TypesInfo, stmt); s != nil {
-				st, err := getExpr(pkg, s.Args[0].(*ast.Ident))
+			if s := getInjectorStmt(g.pkg.TypesInfo, stmt); s != nil {
+				st, err := getExpr(g.pkg, s.Args[0].(*ast.Ident))
 				if err != nil {
 					panic("cannot gen expr")
 				}
@@ -127,66 +149,9 @@ func findInject(pkg *packages.Package, fn *ast.FuncDecl, ff *ast.File) (string, 
 		return true
 	}, nil)
 
-	printAST(pkg.Fset, fn.Body)
+	printAST(g.pkg.Fset, fn.Body)
 
 	return "", nil
-}
-
-func inject(pkg *packages.Package, fn *ast.FuncDecl, call *ast.CallExpr) {
-	fmt.Println("found injector @ func", fn.Name.Name)
-
-	// fmt.Println("comment", fn.Doc.Text())
-	fmt.Println("call pos", pkg.Fset.Position(call.Pos()).Offset, pkg.Fset.Position(call.End()).Offset)
-
-	fmt.Println("checking args...")
-	for _, arg := range call.Args {
-		fmt.Println("call arg type", pkg.TypesInfo.TypeOf(arg).String())
-		fmt.Println("call arg underlying type", pkg.TypesInfo.TypeOf(arg).Underlying().String())
-
-		fmt.Printf("arg: %T", arg)
-
-		o := qualifiedIdentObject(pkg.TypesInfo, arg)
-		fmt.Printf("o: %s", o.Type().String())
-	}
-
-	if fn.Doc != nil {
-		fmt.Println("fn pos (comment)", pkg.Fset.Position(fn.Doc.Pos()).Offset)
-	} else {
-		fmt.Println("fn pos", pkg.Fset.Position(fn.Pos()).Offset)
-	}
-
-	header, _ := getFuncHeader(pkg, fn)
-	fmt.Println(header)
-
-	printAST(pkg.Fset, fn)
-
-	// fn.Type.Params
-	// astutil.Apply()
-
-	fmt.Println("body.list")
-	for _, stmt := range fn.Body.List {
-		fmt.Println("===")
-		printAST(pkg.Fset, stmt)
-	}
-
-	// fn.Type.Params
-}
-
-func printAST(fset *token.FileSet, node interface{}) string {
-	// print function, ref: wire.go writeAST rewritePkgRefs
-	var buf bytes.Buffer
-	if err := format.Node(io.Writer(&buf), fset, node); err != nil {
-		panic(err)
-	}
-	s := buf.String()
-	fmt.Println(s)
-	return s
-}
-
-func printType(typ types.Type, q types.Qualifier) {
-	var buf bytes.Buffer
-	types.WriteType(&buf, typ, q)
-	fmt.Println(buf.String())
 }
 
 // TODO: input format
