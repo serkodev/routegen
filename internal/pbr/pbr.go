@@ -57,8 +57,8 @@ func Load() error {
 		for _, f := range pkg.Syntax {
 			buildFuncs := make(map[*ast.FuncDecl]bool)
 
-			astutil.Apply(f, func(c *astutil.Cursor) bool {
-				fn, ok := c.Node().(*ast.FuncDecl)
+			ast.Inspect(f, func(n ast.Node) bool {
+				fn, ok := n.(*ast.FuncDecl)
 				if !ok {
 					return true
 				}
@@ -70,7 +70,7 @@ func Load() error {
 					buildFuncs[fn] = true
 				}
 				return true
-			}, nil)
+			})
 
 			if len(buildFuncs) > 0 {
 				fmt.Println("found pbr.Build", pkg.Fset.File(f.Pos()).Name())
@@ -99,7 +99,7 @@ func (g *gen) generate(f *ast.File) {
 
 	// printAST(g.pkg.Fset, f)
 	for _, decl := range f.Decls {
-		printAST(g.pkg.Fset, decl)
+		printAST(token.NewFileSet(), decl)
 		fmt.Print("\n")
 	}
 }
@@ -142,6 +142,7 @@ func (g *gen) injectFunction(fn *ast.FuncDecl) (string, error) {
 					panic("cannot gen expr")
 				}
 				c.InsertBefore(st)
+				// _ = st
 				c.Delete()
 			}
 
@@ -149,7 +150,7 @@ func (g *gen) injectFunction(fn *ast.FuncDecl) (string, error) {
 		return true
 	}, nil)
 
-	printAST(g.pkg.Fset, fn.Body)
+	printAST(token.NewFileSet(), fn.Body)
 
 	return "", nil
 }
