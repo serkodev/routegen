@@ -1,5 +1,7 @@
 package list
 
-func GET(r string) {
-	println("about", r)
+import "github.com/gin-gonic/gin"
+
+func GET(c *gin.Context) {
+	println("_id", c)
 }

@@ -23,7 +23,7 @@ func Run() {
 	// about.GET(r)
 	// xx.GET(r)
 
-	Build(rrrrrr, nil, nil)
+	Build(rrrrrr)
 
 	rrrrrr.Run()
 }

@@ -4,22 +4,25 @@
 package router
 
 import (
-	xx1 "example.com/foo/router/api/post"
+	pbr_route "example.com/foo/router/_id"
+	pbr_route2 "example.com/foo/router/about"
+	pbr_route3 "example.com/foo/router/api/post"
+	pbr_route4 "example.com/foo/router/api/user/_id"
+	pbr_route5 "example.com/foo/router/api/user/list"
 	"github.com/gin-gonic/gin"
 )
 
-// var B = 2
-
-// TODO: route callback
-func Build(xx *gin.Engine) {
-	xx.GET("about/a")
-	xx.GET("about/b")
-	xx.GET("abc", xx1.GET)
+func Build(g *gin.Engine) {
+	g.GET("_id", pbr_route.GET)
+	g.GET("about", pbr_route2.GET)
+	g.GET("api/post", pbr_route3.GET)
+	g.GET("api/user/_id", pbr_route4.GET)
+	g.GET("api/user/list", pbr_route5.GET)
+	g.POST("api/user/list", pbr_route5.POST)
 }
 
 func Run() {
-	router := gin.Default()
-	Build(router)
-	router.Run()
-	_ = xx1.GET
+	rrrrrr := gin.Default()
+	Build(rrrrrr)
+	rrrrrr.Run()
 }
