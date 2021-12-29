@@ -7,9 +7,6 @@ import (
 	"github.com/serkodev/pbr"
 )
 
-type bty interface {
-}
-
 func Build(g *gin.Engine) { // gin.RouterGroup
 	pbr.Build(g)
 }

@@ -3,12 +3,22 @@ package pbr
 import (
 	"bytes"
 	"fmt"
+	"go/ast"
+	"go/parser"
 	"go/printer"
 	"go/token"
-	"go/types"
 	"io"
 	"strconv"
 )
+
+func parseExpr(expr string) (*ast.ExprStmt, error) {
+	c, err := parser.ParseExpr(expr) // `r.bar("baz",foo(bar),struct{}{abc: 123})`
+	// c, err := parser.ParseExprFrom(pkg.Fset, "", []byte(ident.Name+`.bar("baz", foo(bar))`), 0)
+	if err != nil {
+		return nil, err
+	}
+	return &ast.ExprStmt{X: c}, nil
+}
 
 func printAST(fset *token.FileSet, node interface{}) string {
 	var buf bytes.Buffer
@@ -18,12 +28,6 @@ func printAST(fset *token.FileSet, node interface{}) string {
 	s := buf.String()
 	fmt.Println(s)
 	return s
-}
-
-func printType(typ types.Type, q types.Qualifier) {
-	var buf bytes.Buffer
-	types.WriteType(&buf, typ, q)
-	fmt.Println(buf.String())
 }
 
 // disambiguate picks a unique name, preferring name if it is already unique.

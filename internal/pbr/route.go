@@ -36,9 +36,7 @@ func newRouteGen() *routeGen {
 }
 
 func (r *routeGen) parseRoute(root string) []*RoutePackage {
-	println("root", root)
 	var routes []*RoutePackage
-
 	filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if info.IsDir() {
 			// get relative path
@@ -68,8 +66,6 @@ func (r *routeGen) parseRoute(root string) []*RoutePackage {
 		}
 		return nil
 	})
-
-	fmt.Printf("routes: %v", routes)
 	return routes
 }
 
@@ -87,7 +83,7 @@ func (r *routeGen) processPkgRouteSels(pkg *packages.Package) RouteSels {
 					if r.isTargetSelector(sel) {
 						sels[""] = append(sels[""], sel)
 					}
-					fmt.Println("func", fd.Name, pkg.PkgPath)
+					fmt.Println("route", fd.Name, pkg.PkgPath)
 				}
 			}
 			return true

@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-func isWireImport(path string) bool {
+func isPbrImport(path string) bool {
 	// TODO(light): This is depending on details of the current loader.
 	const vendorPart = "vendor/"
 	if i := strings.LastIndex(path, vendorPart); i != -1 && (i == 0 || path[i-1] == '/') {
@@ -36,7 +36,7 @@ func qualifiedIdentObject(info *types.Info, expr ast.Expr) types.Object {
 	}
 }
 
-// findInjectorBuild returns the wire.Build call if fn is an injector template.
+// findInjectorBuild returns the pbr.Build call if fn is an injector template.
 // It returns nil if the function is not an injector template.
 func findInjectorBuild(info *types.Info, fn *ast.FuncDecl) (*ast.CallExpr, error) {
 	if fn.Body == nil {
@@ -44,7 +44,7 @@ func findInjectorBuild(info *types.Info, fn *ast.FuncDecl) (*ast.CallExpr, error
 	}
 	numStatements := 0
 	invalid := false
-	var wireBuildCall *ast.CallExpr
+	var pbrBuildCall *ast.CallExpr
 	for _, stmt := range fn.Body.List {
 		switch stmt := stmt.(type) {
 		case *ast.ExprStmt:
@@ -52,24 +52,11 @@ func findInjectorBuild(info *types.Info, fn *ast.FuncDecl) (*ast.CallExpr, error
 			if numStatements > 1 {
 				invalid = true
 			}
-			call, ok := stmt.X.(*ast.CallExpr)
-			if !ok {
+			call := getInjectorStmt(info, stmt)
+			if call == nil {
 				continue
 			}
-			if qualifiedIdentObject(info, call.Fun) == types.Universe.Lookup("panic") {
-				if len(call.Args) != 1 {
-					continue
-				}
-				call, ok = call.Args[0].(*ast.CallExpr)
-				if !ok {
-					continue
-				}
-			}
-			buildObj := qualifiedIdentObject(info, call.Fun)
-			if buildObj == nil || buildObj.Pkg() == nil || !isWireImport(buildObj.Pkg().Path()) || buildObj.Name() != "Build" {
-				continue
-			}
-			wireBuildCall = call
+			pbrBuildCall = call
 		case *ast.EmptyStmt:
 			// Do nothing.
 		case *ast.ReturnStmt:
@@ -80,26 +67,36 @@ func findInjectorBuild(info *types.Info, fn *ast.FuncDecl) (*ast.CallExpr, error
 		default:
 			invalid = true
 		}
-
 	}
-	if wireBuildCall == nil {
+	if pbrBuildCall == nil {
 		return nil, nil
 	}
-	if invalid && wireBuildCall == nil /* TODO: FIX */ {
-		return nil, errors.New("a call to wire.Build indicates that this function is an injector, but injectors must consist of only the wire.Build call and an optional return")
+	if invalid {
+		return nil, errors.New("a call to pbr.Build indicates that this function is an injector, but injectors must consist of only the pbr.Build call and an optional return")
 	}
-	return wireBuildCall, nil
+	return pbrBuildCall, nil
 }
 
 func getInjectorStmt(info *types.Info, stmt ast.Stmt) *ast.CallExpr {
 	if es, ok := stmt.(*ast.ExprStmt); ok {
-		if call, ok := es.X.(*ast.CallExpr); ok {
-			buildObj := qualifiedIdentObject(info, call.Fun)
-			if buildObj == nil || buildObj.Pkg() == nil || !isWireImport(buildObj.Pkg().Path()) || buildObj.Name() != "Build" {
+		call, ok := es.X.(*ast.CallExpr)
+		if !ok {
+			return nil
+		}
+		if qualifiedIdentObject(info, call.Fun) == types.Universe.Lookup("panic") {
+			if len(call.Args) != 1 {
 				return nil
 			}
-			return call
+			call, ok = call.Args[0].(*ast.CallExpr)
+			if !ok {
+				return nil
+			}
 		}
+		buildObj := qualifiedIdentObject(info, call.Fun)
+		if buildObj == nil || buildObj.Pkg() == nil || !isPbrImport(buildObj.Pkg().Path()) || buildObj.Name() != "Build" {
+			return nil
+		}
+		return call
 	}
 	return nil
 }

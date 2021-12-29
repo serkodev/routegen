@@ -14,8 +14,6 @@ import (
 	pbr_route5 "example.com/foo/router/api/user/list"
 )
 
-type bty interface{}
-
 func Build(g *gin.Engine) {
 	g.GET("_id", pbr_route.GET)
 	g.GET("about", pbr_route2.GET)
