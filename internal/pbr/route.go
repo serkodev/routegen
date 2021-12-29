@@ -9,7 +9,7 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
-type RouteSels = map[string][]string
+type RouteSels = map[string][]string // key: sub route, if empty then means index page, value: handles (GET, POST, etc.)
 
 type RoutePackage struct {
 	RelativePath string

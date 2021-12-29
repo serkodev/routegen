@@ -16,9 +16,10 @@ type gen struct {
 	buildFunc map[*ast.FuncDecl]bool
 }
 
-func newGen(pkg *packages.Package) *gen {
+func newGen(pkg *packages.Package, buildFunc map[*ast.FuncDecl]bool) *gen {
 	return &gen{
-		pkg: pkg,
+		pkg:       pkg,
+		buildFunc: buildFunc,
 	}
 }
 
@@ -29,9 +30,6 @@ func Load() error {
 		return err
 	}
 	fmt.Println(wd)
-
-	r := newRouteGen()
-	_ = r.parseRoute(wd)
 
 	cfg := &packages.Config{
 		// Context:    ctx,
@@ -73,10 +71,12 @@ func Load() error {
 			})
 
 			if len(buildFuncs) > 0 {
+				r := newRouteGen()
+				routes := r.parseRoute(wd)
+
 				fmt.Println("found pbr.Build", pkg.Fset.File(f.Pos()).Name())
-				g := newGen(pkg)
-				g.buildFunc = buildFuncs
-				g.inject(f)
+				g := newGen(pkg, buildFuncs)
+				g.inject(f, routes)
 			}
 		}
 	}
@@ -104,25 +104,52 @@ func (g *gen) generate(f *ast.File) {
 	}
 }
 
-func (g *gen) inject(f *ast.File) {
-	// TODO: import fmt.Println("r", g.canUseImportName("r"))
+func (g *gen) importsFromRoutes(routes []*RoutePackage) []*ast.ImportSpec {
+	imports := make([]*ast.ImportSpec, 0, len(routes))
 
+	newNames := make(map[string]bool)
+	inNewNames := func(n string) bool {
+		_, ok := newNames[n]
+		return ok
+	}
+
+	for _, r := range routes {
+		pkgPath := r.PkgPath
+		fmt.Println(pkgPath, r.RelativePath)
+		newName := disambiguate("pbr_route", func(s string) bool {
+			if !g.canUseImportName(s) || inNewNames(s) {
+				return true
+			}
+			return false
+		})
+		newNames[newName] = true
+
+		imports = append(imports, &ast.ImportSpec{
+			Path: &ast.BasicLit{
+				Kind:  token.STRING,
+				Value: `"` + pkgPath + `"`,
+			},
+			Name: ast.NewIdent(newName),
+		})
+
+	}
+	return imports
+}
+
+func (g *gen) inject(f *ast.File, routes []*RoutePackage) {
+	// TODO: check original imported pkg
+	imps := g.importsFromRoutes(routes)
 	astutil.Apply(f, func(c *astutil.Cursor) bool {
-		if _, ok := c.Node().(*ast.ImportSpec); ok {
-
-			//if gen.Tok == token.IMPORT {
-			//	fmt.Println("import token")
-			//	}
-			c.InsertAfter(&ast.ImportSpec{
-				Path: &ast.BasicLit{
-					Kind:  token.STRING,
-					Value: "\"abc\"",
-				},
-				Name: ast.NewIdent("wtf"),
-			})
+		// inject imports
+		if imp, ok := c.Node().(*ast.ImportSpec); ok {
+			if imp.Path.Value == `"github.com/serkodev/pbr"` {
+				for i := len(imps) - 1; i >= 0; i-- {
+					c.InsertAfter(imps[i])
+				}
+				c.Delete()
+			}
 		} else if fn, ok := c.Node().(*ast.FuncDecl); ok && g.buildFunc[fn] {
-			fmt.Println("===== decl =====")
-			g.injectFunction(fn)
+			g.injectFunction(fn, imps, routes)
 		}
 		return true
 	}, nil)
@@ -130,18 +157,28 @@ func (g *gen) inject(f *ast.File) {
 	g.generate(f)
 }
 
-func (g *gen) injectFunction(fn *ast.FuncDecl) (string, error) {
+func (g *gen) injectFunction(fn *ast.FuncDecl, imps []*ast.ImportSpec, routes []*RoutePackage) (string, error) {
 	header, _ := getFuncHeader(g.pkg, fn)
 	fmt.Println(header)
 
 	astutil.Apply(fn.Body, func(c *astutil.Cursor) bool {
 		if stmt, ok := c.Node().(ast.Stmt); ok {
 			if s := getInjectorStmt(g.pkg.TypesInfo, stmt); s != nil {
-				st, err := getExpr(g.pkg, s.Args[0].(*ast.Ident))
-				if err != nil {
-					panic("cannot gen expr")
+
+				// // ident *ast.Ident
+				// st, err := getExpr(s.Args[0].(*ast.Ident).Name + `.bar("baz", foo(bar))`)
+				// if err != nil {
+				// 	panic("cannot gen expr")
+				// }
+				// c.InsertBefore(st)
+
+				ident := s.Args[0].(*ast.Ident)
+				for i, route := range routes {
+					for _, stmt := range injectPkgRoute(ident, imps[i].Name.Name, route) {
+						c.InsertBefore(stmt)
+					}
 				}
-				c.InsertBefore(st)
+
 				// _ = st
 				c.Delete()
 			}
@@ -150,15 +187,30 @@ func (g *gen) injectFunction(fn *ast.FuncDecl) (string, error) {
 		return true
 	}, nil)
 
-	printAST(token.NewFileSet(), fn.Body)
+	// fmt.Println("===== decl =====")
+	// printAST(token.NewFileSet(), fn.Body)
 
 	return "", nil
 }
 
+// TODO: sub route
+func injectPkgRoute(ident *ast.Ident, pkgImportName string, route *RoutePackage) []*ast.ExprStmt {
+	var stmts []*ast.ExprStmt
+	for k, sels := range route.Handles {
+		if k == "" {
+			for _, sel := range sels {
+				expr, _ := getExpr(fmt.Sprintf(`%s.%s("%s", %s.%s)`, ident.Name, sel, route.RelativePath, pkgImportName, sel))
+				stmts = append(stmts, expr)
+			}
+		}
+	}
+	return stmts
+}
+
 // TODO: input format
-func getExpr(pkg *packages.Package, ident *ast.Ident) (*ast.ExprStmt, error) {
-	// c, err := parser.ParseExpr(`r.bar("baz",foo(bar),struct{}{abc: 123})`)
-	c, err := parser.ParseExprFrom(pkg.Fset, "", []byte(ident.Name+`.bar("baz", foo(bar))`), 0)
+func getExpr(expr string) (*ast.ExprStmt, error) {
+	c, err := parser.ParseExpr(expr) // `r.bar("baz",foo(bar),struct{}{abc: 123})`
+	// c, err := parser.ParseExprFrom(pkg.Fset, "", []byte(ident.Name+`.bar("baz", foo(bar))`), 0)
 	if err != nil {
 		return nil, err
 	}
