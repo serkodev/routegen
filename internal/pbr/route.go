@@ -74,22 +74,15 @@ func (r *routeGen) parseRoute(root string) []*RoutePackage {
 }
 
 func (r *routeGen) processPkgRouteSels(pkg *packages.Package) RouteSels {
-	// if pkg.PkgPath != "example.com/foo/router/api/post" {
-	// 	return []string{}
-	// }
-
 	var sels = make(RouteSels)
 	for _, f := range pkg.Syntax {
-		// fmt.Printf("routes: %v\n", f.Scope.String())
-		// ast.Print(pkg.Fset, f)
-
 		ast.Inspect(f, func(n ast.Node) bool {
 			if fd, ok := n.(*ast.FuncDecl); ok {
 				sel := fd.Name.Name
 
 				rt := r.getFuncRecvType(fd)
 				if rt != nil {
-					// TODO: handle with recv
+					// TODO: (sub route) handle with recv
 				} else {
 					if r.isTargetSelector(sel) {
 						sels[""] = append(sels[""], sel)

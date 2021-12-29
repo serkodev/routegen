@@ -11,7 +11,6 @@ import (
 )
 
 func printAST(fset *token.FileSet, node interface{}) string {
-	// print function, ref: wire.go writeAST rewritePkgRefs
 	var buf bytes.Buffer
 	if err := printer.Fprint(io.Writer(&buf), fset, node); err != nil {
 		panic(err)

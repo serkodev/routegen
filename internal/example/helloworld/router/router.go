@@ -3,8 +3,6 @@
 package router
 
 import (
-	xx "example.com/foo/router/api/post"
-
 	"github.com/gin-gonic/gin"
 	"github.com/serkodev/pbr"
 )
