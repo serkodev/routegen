@@ -15,6 +15,7 @@ import (
 )
 
 func Build(g *gin.Engine) {
+	g.POST(".", POST)
 	g.GET("_id", pbr_route.GET)
 	g.GET("about", pbr_route2.GET)
 	g.GET("api/post", pbr_route3.GET)

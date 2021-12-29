@@ -136,9 +136,8 @@ func (g *gen) generate(f *ast.File) error {
 	return nil
 }
 
-func (g *gen) importsFromRoutes(routes []*RoutePackage) []*ast.ImportSpec {
-	imports := make([]*ast.ImportSpec, 0, len(routes))
-
+func (g *gen) importsFromRoutes(routes []*RoutePackage) {
+	// TODO: check original imported pkg
 	newNames := make(map[string]bool)
 	inNewNames := func(n string) bool {
 		_, ok := newNames[n]
@@ -146,6 +145,10 @@ func (g *gen) importsFromRoutes(routes []*RoutePackage) []*ast.ImportSpec {
 	}
 
 	for _, r := range routes {
+		if r.RelativePath == "." {
+			continue
+		}
+
 		newName := disambiguate("pbr_route", func(s string) bool {
 			if !g.canUseImportName(s) || inNewNames(s) {
 				return true
@@ -154,32 +157,33 @@ func (g *gen) importsFromRoutes(routes []*RoutePackage) []*ast.ImportSpec {
 		})
 		newNames[newName] = true
 
-		imports = append(imports, &ast.ImportSpec{
+		r.importSpec = &ast.ImportSpec{
 			Path: &ast.BasicLit{
 				Kind:  token.STRING,
 				Value: `"` + r.PkgPath + `"`,
 			},
 			Name: ast.NewIdent(newName),
-		})
-
+		}
 	}
-	return imports
 }
 
 func (g *gen) inject(f *ast.File, routes []*RoutePackage) {
-	// TODO: check original imported pkg
-	imps := g.importsFromRoutes(routes)
+	g.importsFromRoutes(routes)
+
 	astutil.Apply(f, func(c *astutil.Cursor) bool {
 		// inject imports
 		if imp, ok := c.Node().(*ast.ImportSpec); ok {
 			if imp.Path.Value == `"github.com/serkodev/pbr"` {
-				for i := len(imps) - 1; i >= 0; i-- {
-					c.InsertAfter(imps[i])
+				for i := len(routes) - 1; i >= 0; i-- {
+					routeImp := routes[i]
+					if routeImp.importSpec != nil {
+						c.InsertAfter(routeImp.importSpec)
+					}
 				}
 				c.Delete()
 			}
 		} else if fn, ok := c.Node().(*ast.FuncDecl); ok && g.buildFunc[fn] {
-			g.injectFunction(fn, imps, routes)
+			g.injectFunction(fn, routes)
 		}
 		return true
 	}, nil)
@@ -187,13 +191,13 @@ func (g *gen) inject(f *ast.File, routes []*RoutePackage) {
 	g.generate(f)
 }
 
-func (g *gen) injectFunction(fn *ast.FuncDecl, imps []*ast.ImportSpec, routes []*RoutePackage) error {
+func (g *gen) injectFunction(fn *ast.FuncDecl, routes []*RoutePackage) error {
 	astutil.Apply(fn.Body, func(c *astutil.Cursor) bool {
 		if stmt, ok := c.Node().(ast.Stmt); ok {
 			if s := getInjectorStmt(g.pkg.TypesInfo, stmt); s != nil {
 				ident := s.Args[0].(*ast.Ident)
-				for i, route := range routes {
-					for _, stmt := range injectPkgRoute(ident, imps[i].Name.Name, route) {
+				for _, route := range routes {
+					for _, stmt := range injectPkgRoute(ident, route) {
 						c.InsertBefore(stmt)
 					}
 				}
@@ -206,12 +210,19 @@ func (g *gen) injectFunction(fn *ast.FuncDecl, imps []*ast.ImportSpec, routes []
 	return nil
 }
 
-func injectPkgRoute(ident *ast.Ident, pkgImportName string, route *RoutePackage) []*ast.ExprStmt {
+func injectPkgRoute(ident *ast.Ident, route *RoutePackage) []*ast.ExprStmt {
 	var stmts []*ast.ExprStmt
 	for k, sels := range route.Handles {
 		if k == "" {
 			for _, sel := range sels {
-				expr, _ := parseExpr(fmt.Sprintf(`%s.%s("%s", %s.%s)`, ident.Name, sel, route.RelativePath, pkgImportName, sel))
+				var routeSel string
+				if routeImport := route.importSpec; routeImport != nil {
+					routeSel = routeImport.Name.Name + "." + sel
+				} else {
+					routeSel = sel
+				}
+				// TODO: convert route.RelativePath to route
+				expr, _ := parseExpr(fmt.Sprintf(`%s.%s("%s", %s)`, ident.Name, sel, route.RelativePath, routeSel))
 				stmts = append(stmts, expr)
 			}
 		}

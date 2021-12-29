@@ -15,6 +15,7 @@ type RoutePackage struct {
 	RelativePath string
 	PkgPath      string
 	Handles      RouteSels
+	importSpec   *ast.ImportSpec
 }
 
 type routeGen struct {
@@ -41,9 +42,6 @@ func (r *routeGen) parseRoute(root string) []*RoutePackage {
 		if info.IsDir() {
 			// get relative path
 			rel, _ := filepath.Rel(root, path)
-			if rel == "." {
-				return nil
-			}
 
 			cfg := &packages.Config{
 				Mode: packages.NeedName | packages.NeedCompiledGoFiles | packages.NeedSyntax,
