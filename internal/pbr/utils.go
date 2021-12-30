@@ -16,10 +16,10 @@ func parseExpr(expr string) (ast.Stmt, error) {
 	if err != nil {
 		if e, err := parser.ParseExpr("func(){\n\t" + expr + "\n}"); err == nil {
 			node := e.(*ast.FuncLit).Body.List[0]
-			if stmt, ok := node.(ast.Stmt); !ok {
+			if node == nil {
 				return nil, fmt.Errorf("%T not supported", node)
 			} else {
-				return stmt, nil
+				return node, nil
 			}
 		}
 		return nil, err
