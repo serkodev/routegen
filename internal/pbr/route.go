@@ -9,12 +9,17 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
-type RouteSels = map[string][]string // key: sub route, if empty then means index page, value: handles (GET, POST, etc.)
+type RouteSel struct {
+	Sub  string
+	Sels []string
+}
+
+//= map[string][]string // key: sub route, if empty then means index page, value: handles (GET, POST, etc.)
 
 type RoutePackage struct {
 	RelativePath string
 	PkgPath      string
-	Handles      RouteSels
+	RouteSels    []*RouteSel
 	importSpec   *ast.ImportSpec
 }
 
@@ -53,11 +58,11 @@ func (r *routeGen) parseRoute(root string) []*RoutePackage {
 			}
 
 			for _, pkg := range pkgs {
-				if sels := r.processPkgRouteSels(pkg); len(sels) > 0 {
+				if rs := r.processPkgRouteSels(pkg); len(rs) > 0 {
 					routes = append(routes, &RoutePackage{
 						RelativePath: rel,
 						PkgPath:      pkg.PkgPath,
-						Handles:      sels,
+						RouteSels:    rs,
 					})
 				}
 			}
@@ -67,8 +72,9 @@ func (r *routeGen) parseRoute(root string) []*RoutePackage {
 	return routes
 }
 
-func (r *routeGen) processPkgRouteSels(pkg *packages.Package) RouteSels {
-	var sels = make(RouteSels)
+func (r *routeGen) processPkgRouteSels(pkg *packages.Package) []*RouteSel {
+	// var selsSet []RouteSel
+	selsSet := make(map[string][]string)
 	for _, f := range pkg.Syntax {
 		ast.Inspect(f, func(n ast.Node) bool {
 			if fd, ok := n.(*ast.FuncDecl); ok {
@@ -79,7 +85,7 @@ func (r *routeGen) processPkgRouteSels(pkg *packages.Package) RouteSels {
 					// TODO: (sub route) handle with recv
 				} else {
 					if r.isTargetSelector(sel) {
-						sels[""] = append(sels[""], sel)
+						selsSet[""] = append(selsSet[""], sel)
 					}
 					fmt.Println("route", fd.Name, pkg.PkgPath)
 				}
@@ -87,7 +93,15 @@ func (r *routeGen) processPkgRouteSels(pkg *packages.Package) RouteSels {
 			return true
 		})
 	}
-	return sels
+
+	rs := make([]*RouteSel, 0, len(selsSet))
+	for sub, sels := range selsSet {
+		rs = append(rs, &RouteSel{
+			Sub:  sub,
+			Sels: sels,
+		})
+	}
+	return rs
 }
 
 func (r *routeGen) getFuncRecvType(fd *ast.FuncDecl) *ast.Ident {

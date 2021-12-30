@@ -212,9 +212,9 @@ func (g *gen) injectFunction(fn *ast.FuncDecl, routes []*RoutePackage) error {
 
 func injectPkgRoute(ident *ast.Ident, route *RoutePackage) []*ast.ExprStmt {
 	var stmts []*ast.ExprStmt
-	for k, sels := range route.Handles {
-		if k == "" {
-			for _, sel := range sels {
+	for _, rs := range route.RouteSels {
+		if rs.Sub == "" {
+			for _, sel := range rs.Sels {
 				var routeSel string
 				if routeImport := route.importSpec; routeImport != nil {
 					routeSel = routeImport.Name.Name + "." + sel
