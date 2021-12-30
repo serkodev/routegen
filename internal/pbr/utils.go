@@ -11,10 +11,17 @@ import (
 	"strconv"
 )
 
-func parseExpr(expr string) (*ast.ExprStmt, error) {
-	c, err := parser.ParseExpr(expr) // `r.bar("baz",foo(bar),struct{}{abc: 123})`
-	// c, err := parser.ParseExprFrom(pkg.Fset, "", []byte(ident.Name+`.bar("baz", foo(bar))`), 0)
+func parseExpr(expr string) (ast.Stmt, error) {
+	c, err := parser.ParseExpr(expr)
 	if err != nil {
+		if e, err := parser.ParseExpr("func(){\n\t" + expr + "\n}"); err == nil {
+			node := e.(*ast.FuncLit).Body.List[0]
+			if stmt, ok := node.(ast.Stmt); !ok {
+				return nil, fmt.Errorf("%T not supported", node)
+			} else {
+				return stmt, nil
+			}
+		}
 		return nil, err
 	}
 	return &ast.ExprStmt{X: c}, nil

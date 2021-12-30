@@ -5,6 +5,7 @@ import (
 	"go/ast"
 	"go/printer"
 	"go/token"
+	"go/types"
 	"os"
 	"path/filepath"
 	"strings"
@@ -182,8 +183,11 @@ func (g *gen) inject(f *ast.File, routes []*RoutePackage) {
 				}
 				c.Delete()
 			}
-		} else if fn, ok := c.Node().(*ast.FuncDecl); ok && g.buildFunc[fn] {
-			g.injectFunction(fn, routes)
+		} else if fn, ok := c.Node().(*ast.FuncDecl); ok {
+			if g.buildFunc[fn] {
+				g.injectFunction(fn, routes)
+			}
+			ast.Print(g.pkg.Fset, fn)
 		}
 		return true
 	}, nil)
@@ -196,10 +200,9 @@ func (g *gen) injectFunction(fn *ast.FuncDecl, routes []*RoutePackage) error {
 		if stmt, ok := c.Node().(ast.Stmt); ok {
 			if s := getInjectorStmt(g.pkg.TypesInfo, stmt); s != nil {
 				ident := s.Args[0].(*ast.Ident)
-				for _, route := range routes {
-					for _, stmt := range injectPkgRoute(ident, route) {
-						c.InsertBefore(stmt)
-					}
+				scope := g.pkg.TypesInfo.Scopes[fn.Type]
+				for _, stmt := range injectPkgRoute(ident, routes, scope) {
+					c.InsertBefore(stmt)
 				}
 				c.Delete()
 			}
@@ -207,26 +210,65 @@ func (g *gen) injectFunction(fn *ast.FuncDecl, routes []*RoutePackage) error {
 		return true
 	}, nil)
 	// printAST(token.NewFileSet(), fn.Body)
+
 	return nil
 }
 
-func injectPkgRoute(ident *ast.Ident, route *RoutePackage) []*ast.ExprStmt {
-	var stmts []*ast.ExprStmt
-	for _, rs := range route.RouteSels {
-		if rs.Sub == "" {
+func injectPkgRoute(ident *ast.Ident, routes []*RoutePackage, scope *types.Scope) []ast.Stmt {
+	var stmts []ast.Stmt
+
+	newNames := make(map[string]bool)
+	inNewNames := func(n string) bool {
+		_, ok := newNames[n]
+		return ok
+	}
+
+	for _, route := range routes {
+		for _, rs := range route.RouteSels {
+			// route import
+			selObj := ""
+			if routeImport := route.importSpec; routeImport != nil {
+				selObj = routeImport.Name.Name + "."
+			}
+
+			// sub
+			if rs.Sub != "" {
+				typeVar := disambiguate(strings.ToLower(rs.Sub), func(s string) bool {
+					if _, o := scope.LookupParent(s, token.NoPos); o != nil {
+						return true
+					}
+					if inNewNames(s) {
+						return true
+					}
+					return false
+				})
+				newNames[typeVar] = true
+
+				assignStmt := fmt.Sprintf(`%s := &%s{}`, typeVar, selObj+rs.Sub)
+				expr, err := parseExpr(assignStmt)
+				if err != nil {
+					fmt.Println(expr.End(), err)
+				}
+				stmts = append(stmts, expr)
+
+				selObj = typeVar + "."
+			}
+
 			for _, sel := range rs.Sels {
 				var routeSel string
-				if routeImport := route.importSpec; routeImport != nil {
-					routeSel = routeImport.Name.Name + "." + sel
+
+				if selObj != "" {
+					routeSel = selObj + sel
 				} else {
 					routeSel = sel
 				}
+
 				// TODO: convert route.RelativePath to route
 				expr, _ := parseExpr(fmt.Sprintf(`%s.%s("%s", %s)`, ident.Name, sel, route.RelativePath, routeSel))
 				stmts = append(stmts, expr)
 			}
 		}
-		// TODO: (sub route) else inject sel with func recv
 	}
+
 	return stmts
 }

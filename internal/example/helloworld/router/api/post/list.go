@@ -2,29 +2,22 @@ package post
 
 import "github.com/gin-gonic/gin"
 
-type list struct {
-	Name string
-}
-
-type _list struct {
-}
-
-type _List struct {
-}
-
 // pbr:name=list
 type List struct {
 }
 
-func (l *list) GET(r string) {
+func (*List) POST(g *gin.Context) {
 
 }
 
-func (*list) POST(r string) {
+func (*List) GET(g *gin.Context) {
 
 }
 
-func (_list) GET(r string) {
+type Action struct {
+}
+
+func (*Action) GET(g *gin.Context) {
 
 }
 

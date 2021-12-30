@@ -14,8 +14,6 @@ type RouteSel struct {
 	Sels []string
 }
 
-//= map[string][]string // key: sub route, if empty then means index page, value: handles (GET, POST, etc.)
-
 type RoutePackage struct {
 	RelativePath string
 	PkgPath      string
@@ -80,13 +78,13 @@ func (r *routeGen) processPkgRouteSels(pkg *packages.Package) []*RouteSel {
 			if fd, ok := n.(*ast.FuncDecl); ok {
 				sel := fd.Name.Name
 
-				rt := r.getFuncRecvType(fd)
-				if rt != nil {
-					// TODO: (sub route) handle with recv
-				} else {
-					if r.isTargetSelector(sel) {
-						selsSet[""] = append(selsSet[""], sel)
+				if r.isTargetSelector(sel) {
+					sub := ""
+					if rt := r.getFuncRecvType(fd); rt != nil {
+						sub = rt.Name
 					}
+					selsSet[sub] = append(selsSet[sub], sel)
+
 					fmt.Println("route", fd.Name, pkg.PkgPath)
 				}
 			}
