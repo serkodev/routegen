@@ -21,6 +21,13 @@ func (*Action) GET(g *gin.Context) {
 
 }
 
+type privateAction struct {
+}
+
+func (*privateAction) GET(g *gin.Context) {
+
+}
+
 func GET(g *gin.Context) {
 	println("about", g)
 }

@@ -12,3 +12,10 @@ func tss() {
 
 func POST(c *gin.Context) {
 }
+
+type privateAction struct {
+}
+
+func (*privateAction) GET(g *gin.Context) {
+
+}

@@ -16,6 +16,8 @@ import (
 
 func Build(g *gin.Engine) {
 	g.POST(".", POST)
+	privateaction := &privateAction{}
+	g.GET(".", privateaction.GET)
 	g.GET("_id", pbr_route.GET)
 	g.GET("about", pbr_route2.GET)
 	list := &pbr_route3.List{}

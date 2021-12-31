@@ -5,6 +5,7 @@ import (
 	"go/ast"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"golang.org/x/tools/go/packages"
 )
@@ -45,6 +46,7 @@ func (r *routeGen) parseRoute(root string) []*RoutePackage {
 		if info.IsDir() {
 			// get relative path
 			rel, _ := filepath.Rel(root, path)
+			root := rel == "."
 
 			cfg := &packages.Config{
 				Mode: packages.NeedName | packages.NeedCompiledGoFiles | packages.NeedSyntax,
@@ -56,7 +58,7 @@ func (r *routeGen) parseRoute(root string) []*RoutePackage {
 			}
 
 			for _, pkg := range pkgs {
-				if rs := r.processPkgRouteSels(pkg); len(rs) > 0 {
+				if rs := r.processPkgRouteSels(pkg, root); len(rs) > 0 {
 					routes = append(routes, &RoutePackage{
 						RelativePath: rel,
 						PkgPath:      pkg.PkgPath,
@@ -70,7 +72,7 @@ func (r *routeGen) parseRoute(root string) []*RoutePackage {
 	return routes
 }
 
-func (r *routeGen) processPkgRouteSels(pkg *packages.Package) []*RouteSel {
+func (r *routeGen) processPkgRouteSels(pkg *packages.Package, root bool) []*RouteSel {
 	// var selsSet []RouteSel
 	selsSet := make(map[string][]string)
 	for _, f := range pkg.Syntax {
@@ -81,6 +83,9 @@ func (r *routeGen) processPkgRouteSels(pkg *packages.Package) []*RouteSel {
 				if r.isTargetSelector(sel) {
 					sub := ""
 					if rt := r.getFuncRecvType(fd); rt != nil {
+						if !isPublicVar(rt) && !root {
+							return true
+						}
 						sub = rt.Name
 					}
 					selsSet[sub] = append(selsSet[sub], sel)
@@ -100,6 +105,14 @@ func (r *routeGen) processPkgRouteSels(pkg *packages.Package) []*RouteSel {
 		})
 	}
 	return rs
+}
+
+func isPublicVar(ident *ast.Ident) bool {
+	if len(ident.Name) == 0 {
+		return false
+	}
+	firstChar := string(ident.Name[0:1])
+	return firstChar == strings.ToUpper(firstChar)
 }
 
 func (r *routeGen) getFuncRecvType(fd *ast.FuncDecl) *ast.Ident {
