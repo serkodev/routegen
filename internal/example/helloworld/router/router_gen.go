@@ -17,15 +17,17 @@ import (
 func Build(g *gin.Engine) {
 	g.POST("/", POST)
 	privateaction := &privateAction{}
-	g.GET("/privateaction", privateaction.GET)
+	g.GET("/private-action", privateaction.GET)
 	g.GET("/:id", pbr_route.GET)
 	g.GET("/about", pbr_route2.GET)
-	g.GET("/api/post", pbr_route3.GET)
 	list := &pbr_route3.List{}
 	g.POST("/api/post/listavd", list.POST)
 	g.GET("/api/post/listavd", list.GET)
 	action := &pbr_route3.Action{}
 	g.GET("/api/post/action", action.GET)
+	g.GET("/api/post", pbr_route3.GET)
+	blist := &pbr_route3.BList{}
+	g.POST("/api/post/b-list", blist.POST)
 	g.GET("/api/user/:id", pbr_route4.GET)
 	g.GET("/api/user/list", pbr_route5.GET)
 	g.POST("/api/user/list", pbr_route5.POST)

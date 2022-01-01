@@ -11,9 +11,6 @@ type List struct {
 // cannot export type define
 type MyInt2 = List
 
-type Bist struct {
-}
-
 func (*List) POST(g *gin.Context) {
 
 }
@@ -38,4 +35,11 @@ func (*privateAction) GET(g *gin.Context) {
 
 func GET(g *gin.Context) {
 	println("about", g)
+}
+
+type BList struct {
+}
+
+func (*BList) POST(g *gin.Context) {
+
 }

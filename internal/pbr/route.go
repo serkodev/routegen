@@ -33,6 +33,8 @@ type routeGen struct {
 	sels map[string]struct{}
 }
 
+var pbrRegex = regexp.MustCompile(`^//\s*pbr\s+(.*)$`)
+
 func newRouteGen() *routeGen {
 	r := &routeGen{}
 
@@ -79,8 +81,6 @@ func (r *routeGen) parseRoute(root string) []*RoutePackage {
 }
 
 func (r *routeGen) processTypeOption(pkg *packages.Package) map[string]*RouteTypeCustomOption {
-	regex := regexp.MustCompile(`^//\s*pbr\s+(.*)$`)
-
 	options := make(map[string]*RouteTypeCustomOption)
 
 	for _, f := range pkg.Syntax {
@@ -91,7 +91,7 @@ func (r *routeGen) processTypeOption(pkg *packages.Package) map[string]*RouteTyp
 					setted := false
 
 					for _, comment := range decl.Doc.List {
-						match := regex.FindStringSubmatch(comment.Text)
+						match := pbrRegex.FindStringSubmatch(comment.Text)
 						if match != nil {
 							query := match[1]
 							if s := strings.SplitN(query, "=", 2); len(s) == 2 {
@@ -180,7 +180,7 @@ func (r *routeGen) getRoutePath(relativePath string, sub string, opt *RouteTypeC
 		if opt != nil && opt.PathComponentAlias != "" {
 			path = filepath.Join(path, opt.PathComponentAlias)
 		} else {
-			path = filepath.Join(path, strings.ToLower(sub))
+			path = filepath.Join(path, kebabCaseString(sub))
 		}
 	}
 
