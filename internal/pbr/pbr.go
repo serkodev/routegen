@@ -63,6 +63,7 @@ func Load() error {
 				if !ok {
 					return true
 				}
+
 				if buildCall, err := findInjectorBuild(pkg.TypesInfo, fn); err != nil {
 					fmt.Println("findInjectorBuild error", err.Error())
 					return true
@@ -187,7 +188,6 @@ func (g *gen) inject(f *ast.File, routes []*RoutePackage) {
 			if g.buildFunc[fn] {
 				g.injectFunction(fn, routes)
 			}
-			ast.Print(g.pkg.Fset, fn)
 		}
 		return true
 	}, nil)
@@ -264,7 +264,7 @@ func injectPkgRoute(ident *ast.Ident, routes []*RoutePackage, scope *types.Scope
 				}
 
 				// TODO: convert route.RelativePath to route
-				expr, _ := parseExpr(fmt.Sprintf(`%s.%s("%s", %s)`, ident.Name, sel, route.RelativePath, routeSel))
+				expr, _ := parseExpr(fmt.Sprintf(`%s.%s("%s", %s)`, ident.Name, sel, rs.RoutePath, routeSel))
 				stmts = append(stmts, expr)
 			}
 		}

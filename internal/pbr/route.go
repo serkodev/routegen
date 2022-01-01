@@ -3,16 +3,19 @@ package pbr
 import (
 	"fmt"
 	"go/ast"
+	"go/token"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"golang.org/x/tools/go/packages"
 )
 
 type RouteSel struct {
-	Sub  string
-	Sels []string
+	Sub       string
+	Sels      []string
+	RoutePath string
 }
 
 type RoutePackage struct {
@@ -20,6 +23,10 @@ type RoutePackage struct {
 	PkgPath      string
 	RouteSels    []*RouteSel
 	importSpec   *ast.ImportSpec
+}
+
+type RouteTypeCustomOption struct {
+	PathComponentAlias string
 }
 
 type routeGen struct {
@@ -46,7 +53,6 @@ func (r *routeGen) parseRoute(root string) []*RoutePackage {
 		if info.IsDir() {
 			// get relative path
 			rel, _ := filepath.Rel(root, path)
-			root := rel == "."
 
 			cfg := &packages.Config{
 				Mode: packages.NeedName | packages.NeedCompiledGoFiles | packages.NeedSyntax,
@@ -58,7 +64,7 @@ func (r *routeGen) parseRoute(root string) []*RoutePackage {
 			}
 
 			for _, pkg := range pkgs {
-				if rs := r.processPkgRouteSels(pkg, root); len(rs) > 0 {
+				if rs := r.processPkgRouteSels(pkg, rel); len(rs) > 0 {
 					routes = append(routes, &RoutePackage{
 						RelativePath: rel,
 						PkgPath:      pkg.PkgPath,
@@ -72,7 +78,58 @@ func (r *routeGen) parseRoute(root string) []*RoutePackage {
 	return routes
 }
 
-func (r *routeGen) processPkgRouteSels(pkg *packages.Package, root bool) []*RouteSel {
+func (r *routeGen) processTypeOption(pkg *packages.Package) map[string]*RouteTypeCustomOption {
+	regex := regexp.MustCompile(`^//\s*pbr\s+(.*)$`)
+
+	options := make(map[string]*RouteTypeCustomOption)
+
+	for _, f := range pkg.Syntax {
+		ast.Inspect(f, func(n ast.Node) bool {
+			if decl, ok := n.(*ast.GenDecl); ok {
+				if decl.Tok == token.TYPE && decl.Doc != nil {
+					var option RouteTypeCustomOption
+					setted := false
+
+					for _, comment := range decl.Doc.List {
+						match := regex.FindStringSubmatch(comment.Text)
+						if match != nil {
+							query := match[1]
+							if s := strings.SplitN(query, "=", 2); len(s) == 2 {
+								key, val := s[0], s[1]
+								if key == "alias" {
+									option.PathComponentAlias = val
+									setted = true
+								}
+							}
+						}
+					}
+
+					if setted {
+						if typeIdent := getTypeIdentFromGenDecl(decl); typeIdent != nil {
+							options[typeIdent.Name] = &option
+						}
+					}
+				}
+			}
+			return true
+		})
+	}
+
+	return options
+}
+
+func getTypeIdentFromGenDecl(decl *ast.GenDecl) *ast.Ident {
+	if decl.Tok == token.TYPE {
+		if len(decl.Specs) == 1 {
+			if ts, ok := decl.Specs[0].(*ast.TypeSpec); ok {
+				return ts.Name
+			}
+		}
+	}
+	return nil
+}
+
+func (r *routeGen) processPkgRouteSels(pkg *packages.Package, relativePath string) []*RouteSel {
 	// var selsSet []RouteSel
 	selsSet := make(map[string][]string)
 	for _, f := range pkg.Syntax {
@@ -83,7 +140,7 @@ func (r *routeGen) processPkgRouteSels(pkg *packages.Package, root bool) []*Rout
 				if r.isTargetSelector(sel) {
 					sub := ""
 					if rt := r.getFuncRecvType(fd); rt != nil {
-						if !isPublicVar(rt) && !root {
+						if !isPublicVar(rt) && relativePath != "." {
 							return true
 						}
 						sub = rt.Name
@@ -97,14 +154,48 @@ func (r *routeGen) processPkgRouteSels(pkg *packages.Package, root bool) []*Rout
 		})
 	}
 
+	options := r.processTypeOption(pkg)
 	rs := make([]*RouteSel, 0, len(selsSet))
 	for sub, sels := range selsSet {
+		opt := options[sub]
 		rs = append(rs, &RouteSel{
-			Sub:  sub,
-			Sels: sels,
+			Sub:       sub,
+			Sels:      sels,
+			RoutePath: r.getRoutePath(relativePath, sub, opt),
 		})
 	}
 	return rs
+}
+
+func (r *routeGen) getRoutePath(relativePath string, sub string, opt *RouteTypeCustomOption) string {
+	path := relativePath
+	if path == "." {
+		path = ""
+	}
+	path = filepath.Join("/", path)
+
+	// sub route
+	if sub != "" {
+		// apply alias
+		if opt != nil && opt.PathComponentAlias != "" {
+			path = filepath.Join(path, opt.PathComponentAlias)
+		} else {
+			path = filepath.Join(path, strings.ToLower(sub))
+		}
+	}
+
+	pathComponents := strings.Split(path, "/")
+	for i, pathComponent := range pathComponents {
+		if len(pathComponent) >= 2 {
+			if pathComponent[0:2] == "__" {
+				pathComponents[i] = pathComponent[1:]
+			} else if pathComponent[0:1] == "_" {
+				pathComponents[i] = ":" + pathComponent[1:]
+			}
+		}
+	}
+
+	return strings.Join(pathComponents, "/")
 }
 
 func isPublicVar(ident *ast.Ident) bool {

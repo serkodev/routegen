@@ -2,8 +2,16 @@ package post
 
 import "github.com/gin-gonic/gin"
 
-// pbr:name=list
+// foo bar comment
+// pbr alias=listavd
 type List struct {
+	// abc
+}
+
+// cannot export type define
+type MyInt2 = List
+
+type Bist struct {
 }
 
 func (*List) POST(g *gin.Context) {
