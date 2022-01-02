@@ -12,16 +12,7 @@ func Build(g *gin.Engine) { // gin.RouterGroup
 }
 
 func Run() {
-	b := &gin.Engine{}
-	println(b)
-
-	rrrrrr := gin.Default()
-
-	// r := &route.Route{}
-	// about.GET(r)
-	// xx.GET(r)
-
-	Build(rrrrrr)
-
-	rrrrrr.Run()
+	g := gin.Default()
+	Build(g)
+	g.Run()
 }
