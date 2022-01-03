@@ -11,6 +11,19 @@ import (
 	"strconv"
 )
 
+func mustParseExprF(format string, a ...interface{}) ast.Stmt {
+	expr := fmt.Sprintf(format, a...)
+	return mustParseExpr(expr)
+}
+
+func mustParseExpr(expr string) ast.Stmt {
+	stmt, err := parseExpr(expr)
+	if err != nil {
+		panic(err)
+	}
+	return stmt
+}
+
 func parseExpr(expr string) (ast.Stmt, error) {
 	c, err := parser.ParseExpr(expr)
 	if err != nil {

@@ -87,16 +87,6 @@ func Load() error {
 	return nil
 }
 
-func (g *gen) canUseImportName(name string) bool {
-	for fn := range g.buildFunc {
-		_, o := g.pkg.TypesInfo.Scopes[fn.Type].LookupParent(name, token.NoPos)
-		if o != nil {
-			return false
-		}
-	}
-	return true
-}
-
 func (g *gen) generate(f *ast.File) error {
 	oriFilePath := g.pkg.Fset.File(f.Pos()).Name()
 
@@ -138,49 +128,51 @@ func (g *gen) generate(f *ast.File) error {
 	return nil
 }
 
-func (g *gen) importsFromRoutes(routes []*RoutePackage) {
+func (g *gen) importsFromRoutes(routes []*RoutePackage, n *namer) []*ast.ImportSpec {
+	var specs []*ast.ImportSpec
+
 	// TODO: check original imported pkg
-	newNames := make(map[string]bool)
-	inNewNames := func(n string) bool {
-		_, ok := newNames[n]
-		return ok
-	}
-
 	for _, r := range routes {
-		if r.RelativePath == "/" {
-			continue
-		}
-
-		newName := disambiguate("pbr_route", func(s string) bool {
-			if !g.canUseImportName(s) || inNewNames(s) {
-				return true
+		if r.RelativePath != "." {
+			newName := n.gen("pbr_route")
+			spec := &ast.ImportSpec{
+				Path: &ast.BasicLit{
+					Kind:  token.STRING,
+					Value: `"` + r.PkgPath + `"`,
+				},
+				Name: ast.NewIdent(newName),
 			}
-			return false
-		})
-		newNames[newName] = true
-
-		r.importSpec = &ast.ImportSpec{
-			Path: &ast.BasicLit{
-				Kind:  token.STRING,
-				Value: `"` + r.PkgPath + `"`,
-			},
-			Name: ast.NewIdent(newName),
+			r.importSpec = spec
+			specs = append(specs, spec)
+		}
+		if len(r.SubPackages) > 0 {
+			specs = append(specs, g.importsFromRoutes(r.SubPackages, n)...)
 		}
 	}
+
+	return specs
 }
 
 func (g *gen) inject(f *ast.File, routes []*RoutePackage) {
-	g.importsFromRoutes(routes)
+	scopes := make([]*types.Scope, len(g.buildFunc))
+	for fn := range g.buildFunc {
+		scopes = append(scopes, g.pkg.TypesInfo.Scopes[fn.Type])
+	}
+	n := newNamerWithScopes(scopes)
+	specs := g.importsFromRoutes(routes, n)
 
 	astutil.Apply(f, func(c *astutil.Cursor) bool {
 		// inject imports
 		if imp, ok := c.Node().(*ast.ImportSpec); ok {
 			if imp.Path.Value == `"github.com/serkodev/pbr"` {
-				for i := len(routes) - 1; i >= 0; i-- {
-					routeImp := routes[i]
-					if routeImp.importSpec != nil {
-						c.InsertAfter(routeImp.importSpec)
-					}
+				// for i := len(routes) - 1; i >= 0; i-- {
+				// 	routeImp := routes[i]
+				// 	if routeImp.importSpec != nil {
+				// 		c.InsertAfter(routeImp.importSpec)
+				// 	}
+				// }
+				for i := len(specs) - 1; i >= 0; i-- {
+					c.InsertAfter(specs[i])
 				}
 				c.Delete()
 			}
@@ -201,7 +193,8 @@ func (g *gen) injectFunction(fn *ast.FuncDecl, routes []*RoutePackage) error {
 			if s := getInjectorStmt(g.pkg.TypesInfo, stmt); s != nil {
 				ident := s.Args[0].(*ast.Ident)
 				scope := g.pkg.TypesInfo.Scopes[fn.Type]
-				for _, stmt := range injectPkgRoute(ident, routes, scope) {
+				n := newNamer(scope)
+				for _, stmt := range injectPkgRoute(ident, routes, n) {
 					c.InsertBefore(stmt)
 				}
 				c.Delete()
@@ -214,60 +207,74 @@ func (g *gen) injectFunction(fn *ast.FuncDecl, routes []*RoutePackage) error {
 	return nil
 }
 
-func injectPkgRoute(ident *ast.Ident, routes []*RoutePackage, scope *types.Scope) []ast.Stmt {
+func injectPkgRoute(ident *ast.Ident, routes []*RoutePackage, n *namer) []ast.Stmt {
 	var stmts []ast.Stmt
 
-	newNames := make(map[string]bool)
-	inNewNames := func(n string) bool {
-		_, ok := newNames[n]
-		return ok
-	}
-
 	for _, route := range routes {
-		for _, rs := range route.RouteSels {
-			// route import
-			selObj := ""
-			if routeImport := route.importSpec; routeImport != nil {
-				selObj = routeImport.Name.Name + "."
+		rIdent := ident
+
+		imp := ""
+		if routeImport := route.importSpec; routeImport != nil {
+			imp = routeImport.Name.Name
+		}
+
+		routePath := route.routePath()
+		hasMiddleware := route.hasMiddleware()
+
+		if hasMiddleware {
+			groupVal := n.gen("grp")
+			stmts = append(stmts, mustParseExprF(`%s := %s.Group("%s")`, groupVal, ident.Name, routePath))
+
+			rIdent = ast.NewIdent(groupVal)
+			routePath = "" // set for root route path
+		}
+
+		if rstmts := injectSels(rIdent, route.Sels, imp, routePath); len(rstmts) > 0 {
+			stmts = append(stmts, rstmts...)
+		}
+
+		for _, rs := range route.SubRoutes {
+			if rs.Sub == "" {
+				panic("sub route Sub should not empty")
 			}
 
 			// sub
-			if rs.Sub != "" {
-				typeVar := disambiguate(strings.ToLower(rs.Sub), func(s string) bool {
-					if _, o := scope.LookupParent(s, token.NoPos); o != nil {
-						return true
-					}
-					if inNewNames(s) {
-						return true
-					}
-					return false
-				})
-				newNames[typeVar] = true
-
-				assignStmt := fmt.Sprintf(`%s := &%s{}`, typeVar, selObj+rs.Sub)
-				expr, err := parseExpr(assignStmt)
-				if err != nil {
-					fmt.Println(expr.End(), err)
-				}
-				stmts = append(stmts, expr)
-
-				selObj = typeVar + "."
+			typeVar := n.gen(strings.ToLower(rs.Sub))
+			sub := rs.Sub
+			if imp != "" {
+				sub = imp + "." + sub
 			}
+			stmts = append(stmts, mustParseExprF(`%s := &%s{}`, typeVar, sub))
 
-			for _, sel := range rs.Sels {
-				var routeSel string
+			routePath := getRoutePath(routePath, rs.Path)
 
-				if selObj != "" {
-					routeSel = selObj + sel
-				} else {
-					routeSel = sel
-				}
-
-				// TODO: convert route.RelativePath to route
-				routePath := filepath.Join(route.RelativePath, rs.Path)
-				expr, _ := parseExpr(fmt.Sprintf(`%s.%s("%s", %s)`, ident.Name, sel, routePath, routeSel))
-				stmts = append(stmts, expr)
+			if rstmts := injectSels(rIdent, rs.Sels, typeVar, routePath); len(rstmts) > 0 {
+				stmts = append(stmts, rstmts...)
 			}
+		}
+
+		// sub packages
+		if hasMiddleware {
+			stmts = append(stmts, injectPkgRoute(rIdent, route.SubPackages, n)...)
+		}
+	}
+
+	return stmts
+}
+
+func injectSels(ident *ast.Ident, sels []string, typeVar string, routePath string) []ast.Stmt {
+	var stmts []ast.Stmt
+
+	for _, sel := range sels {
+		var routeSel = sel
+		if typeVar != "" {
+			routeSel = typeVar + "." + routeSel
+		}
+
+		if sel == "Middleware" {
+			stmts = append(stmts, mustParseExprF(`%s.Use(%s)`, ident.Name, routeSel))
+		} else {
+			stmts = append(stmts, mustParseExprF(`%s.%s("%s", %s)`, ident.Name, sel, routePath, routeSel))
 		}
 	}
 

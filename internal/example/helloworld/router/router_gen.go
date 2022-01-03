@@ -9,11 +9,13 @@ import (
 	"github.com/gin-gonic/gin"
 	pbr_route "example.com/foo/router/_id"
 	pbr_route2 "example.com/foo/router/about"
-	pbr_route3 "example.com/foo/router/api/post"
-	pbr_route4 "example.com/foo/router/api/user/_id"
-	pbr_route5 "example.com/foo/router/api/user/list"
-	pbr_route6 "example.com/foo/router/api/yser"
-	pbr_route7 "example.com/foo/router/blog"
+	pbr_route3 "example.com/foo/router/api"
+	pbr_route4 "example.com/foo/router/api/post"
+	pbr_route5 "example.com/foo/router/api/user/_id"
+	pbr_route6 "example.com/foo/router/api/user/list"
+	pbr_route7 "example.com/foo/router/api/user/list/admin"
+	pbr_route8 "example.com/foo/router/api/yser"
+	pbr_route9 "example.com/foo/router/blog"
 )
 
 func Build(g *gin.Engine) {
@@ -22,21 +24,31 @@ func Build(g *gin.Engine) {
 	g.GET("/private-action", privateaction.GET)
 	g.GET("/:id", pbr_route.GET)
 	g.GET("/about", pbr_route2.GET)
-	g.GET("/api/post", pbr_route3.GET)
-	blist := &pbr_route3.BList{}
-	g.POST("/api/post/b-list", blist.POST)
-	list := &pbr_route3.List{}
-	g.POST("/api/post/listavd", list.POST)
-	g.GET("/api/post/listavd", list.GET)
-	action := &pbr_route3.Action{}
-	g.GET("/api/post/action", action.GET)
-	g.GET("/api/user/:id", pbr_route4.GET)
-	g.GET("/api/user/list", pbr_route5.GET)
-	g.POST("/api/user/list", pbr_route5.POST)
-	action2 := &pbr_route5.Action{}
-	g.GET("/api/user/list/action", action2.GET)
-	g.GET("/api/yser", pbr_route6.GET)
-	g.GET("/blog", pbr_route7.GET)
+	grp := g.Group("/api")
+	grp.Use(pbr_route3.Middleware)
+	grp.GET("/post", pbr_route4.GET)
+	blist := &pbr_route4.BList{}
+	grp.POST("/post/b-list", blist.POST)
+	list := &pbr_route4.List{}
+	grp.GET("/post/listavd", list.GET)
+	grp.POST("/post/listavd", list.POST)
+	action := &pbr_route4.Action{}
+	grp.GET("/post/action", action.GET)
+	grp.GET("/user/:id", pbr_route5.GET)
+	grp2 := grp.Group("/user/list")
+	grp2.Use(pbr_route6.Middleware)
+	grp2.GET("", pbr_route6.GET)
+	grp2.POST("", pbr_route6.POST)
+	action2 := &pbr_route6.Action{}
+	grp2.GET("/action", action2.GET)
+	grp3 := grp2.Group("/admin")
+	grp3.Use(pbr_route7.Middleware)
+	grp3.GET("", pbr_route7.GET)
+	grp3.POST("", pbr_route7.POST)
+	action3 := &pbr_route7.Action{}
+	grp3.GET("/action", action3.GET)
+	grp.GET("/yser", pbr_route8.GET)
+	g.GET("/blog", pbr_route9.GET)
 }
 
 func Run() {
