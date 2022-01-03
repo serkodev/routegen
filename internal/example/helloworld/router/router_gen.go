@@ -12,27 +12,31 @@ import (
 	pbr_route3 "example.com/foo/router/api/post"
 	pbr_route4 "example.com/foo/router/api/user/_id"
 	pbr_route5 "example.com/foo/router/api/user/list"
+	pbr_route6 "example.com/foo/router/api/yser"
+	pbr_route7 "example.com/foo/router/blog"
 )
 
 func Build(g *gin.Engine) {
+	g.POST("/", POST)
 	privateaction := &privateAction{}
 	g.GET("/private-action", privateaction.GET)
-	g.POST("/", POST)
 	g.GET("/:id", pbr_route.GET)
 	g.GET("/about", pbr_route2.GET)
+	g.GET("/api/post", pbr_route3.GET)
+	blist := &pbr_route3.BList{}
+	g.POST("/api/post/b-list", blist.POST)
 	list := &pbr_route3.List{}
 	g.POST("/api/post/listavd", list.POST)
 	g.GET("/api/post/listavd", list.GET)
 	action := &pbr_route3.Action{}
 	g.GET("/api/post/action", action.GET)
-	g.GET("/api/post", pbr_route3.GET)
-	blist := &pbr_route3.BList{}
-	g.POST("/api/post/b-list", blist.POST)
 	g.GET("/api/user/:id", pbr_route4.GET)
 	g.GET("/api/user/list", pbr_route5.GET)
 	g.POST("/api/user/list", pbr_route5.POST)
 	action2 := &pbr_route5.Action{}
 	g.GET("/api/user/list/action", action2.GET)
+	g.GET("/api/yser", pbr_route6.GET)
+	g.GET("/blog", pbr_route7.GET)
 }
 
 func Run() {

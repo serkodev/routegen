@@ -13,16 +13,18 @@ import (
 )
 
 type RouteSel struct {
-	Sub       string
-	Sels      []string
-	RoutePath string
+	Sub  string
+	Sels []string
+	Path string // sub path
 }
 
 type RoutePackage struct {
-	RelativePath string
-	PkgPath      string
-	RouteSels    []*RouteSel
-	importSpec   *ast.ImportSpec
+	RelativePath      string
+	PkgPath           string
+	RouteSels         []*RouteSel
+	SubPackages       []*RoutePackage // for middleware
+
+	importSpec *ast.ImportSpec
 }
 
 type RouteTypeCustomOption struct {
@@ -68,7 +70,7 @@ func (r *routeGen) parseRoute(root string) []*RoutePackage {
 			for _, pkg := range pkgs {
 				if rs := r.processPkgRouteSels(pkg, rel); len(rs) > 0 {
 					routes = append(routes, &RoutePackage{
-						RelativePath: rel,
+						RelativePath: relatvePath(rel),
 						PkgPath:      pkg.PkgPath,
 						RouteSels:    rs,
 					})
@@ -159,20 +161,37 @@ func (r *routeGen) processPkgRouteSels(pkg *packages.Package, relativePath strin
 	for sub, sels := range selsSet {
 		opt := options[sub]
 		rs = append(rs, &RouteSel{
-			Sub:       sub,
-			Sels:      sels,
-			RoutePath: r.getRoutePath(relativePath, sub, opt),
+			Sub:  sub,
+			Sels: sels,
+			Path: r.getRoutePath(sub, opt),
 		})
 	}
 	return rs
 }
 
-func (r *routeGen) getRoutePath(relativePath string, sub string, opt *RouteTypeCustomOption) string {
-	path := relativePath
+func relatvePath(path string) string {
 	if path == "." {
 		path = ""
 	}
-	path = filepath.Join("/", path)
+	return buildParamPath(filepath.Join("/", path))
+}
+
+func buildParamPath(path string) string {
+	pathComponents := strings.Split(path, "/")
+	for i, pathComponent := range pathComponents {
+		if len(pathComponent) >= 2 {
+			if pathComponent[0:2] == "__" {
+				pathComponents[i] = pathComponent[1:]
+			} else if pathComponent[0:1] == "_" {
+				pathComponents[i] = ":" + pathComponent[1:]
+			}
+		}
+	}
+	return strings.Join(pathComponents, "/")
+}
+
+func (r *routeGen) getRoutePath(sub string, opt *RouteTypeCustomOption) string {
+	path := ""
 
 	// sub route
 	if sub != "" {
@@ -184,18 +203,7 @@ func (r *routeGen) getRoutePath(relativePath string, sub string, opt *RouteTypeC
 		}
 	}
 
-	pathComponents := strings.Split(path, "/")
-	for i, pathComponent := range pathComponents {
-		if len(pathComponent) >= 2 {
-			if pathComponent[0:2] == "__" {
-				pathComponents[i] = pathComponent[1:]
-			} else if pathComponent[0:1] == "_" {
-				pathComponents[i] = ":" + pathComponent[1:]
-			}
-		}
-	}
-
-	return strings.Join(pathComponents, "/")
+	return buildParamPath(path)
 }
 
 func isPublicVar(ident *ast.Ident) bool {

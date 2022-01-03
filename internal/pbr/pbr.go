@@ -147,7 +147,7 @@ func (g *gen) importsFromRoutes(routes []*RoutePackage) {
 	}
 
 	for _, r := range routes {
-		if r.RelativePath == "." {
+		if r.RelativePath == "/" {
 			continue
 		}
 
@@ -264,7 +264,8 @@ func injectPkgRoute(ident *ast.Ident, routes []*RoutePackage, scope *types.Scope
 				}
 
 				// TODO: convert route.RelativePath to route
-				expr, _ := parseExpr(fmt.Sprintf(`%s.%s("%s", %s)`, ident.Name, sel, rs.RoutePath, routeSel))
+				routePath := filepath.Join(route.RelativePath, rs.Path)
+				expr, _ := parseExpr(fmt.Sprintf(`%s.%s("%s", %s)`, ident.Name, sel, routePath, routeSel))
 				stmts = append(stmts, expr)
 			}
 		}
