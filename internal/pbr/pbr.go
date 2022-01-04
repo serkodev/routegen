@@ -207,77 +207,73 @@ func (g *gen) injectFunction(fn *ast.FuncDecl, routes []*RoutePackage) error {
 	return nil
 }
 
-func injectPkgRoute(ident *ast.Ident, routes []*RoutePackage, n *namer) []ast.Stmt {
+func injectPkgRoute(ident *ast.Ident, routePkgs []*RoutePackage, n *namer) []ast.Stmt {
 	var stmts []ast.Stmt
 
-	for _, route := range routes {
-		rIdent := ident
+	for _, routePkg := range routePkgs {
+		routePkgIdent := ident
+		routePkgPath := routePkg.routePath()
 
 		imp := ""
-		if routeImport := route.importSpec; routeImport != nil {
+		if routeImport := routePkg.importSpec; routeImport != nil {
 			imp = routeImport.Name.Name
 		}
 
-		routePath := route.routePath()
-		hasMiddleware := route.hasMiddleware()
+		for _, r := range routePkg.Routes {
+			rIdent := routePkgIdent
+			rPath := buildRoutePath(routePkgPath, r.Path)
 
-		if hasMiddleware {
-			groupVal := n.gen("grp")
-			stmts = append(stmts, mustParseExprF(`%s := %s.Group("%s")`, groupVal, ident.Name, routePath))
+			if r.hasMiddleware() {
+				var groupIdent = ast.NewIdent(n.gen("grp"))
+				var groupRoutePath = rPath
 
-			rIdent = ast.NewIdent(groupVal)
-			routePath = "" // set for root route path
-		}
+				if r.isRootRoute() {
+					groupRoutePath = routePkgPath
 
-		if rstmts := injectSels(rIdent, route.Sels, imp, routePath); len(rstmts) > 0 {
-			stmts = append(stmts, rstmts...)
-		}
+					// update routePkg
+					routePkgIdent = groupIdent
+					routePkgPath = ""
+				}
 
-		for _, rs := range route.SubRoutes {
-			srIdent := rIdent
+				stmts = append(stmts, mustParseExprF(`%s := %s.Group("%s")`, groupIdent.Name, rIdent.Name, groupRoutePath))
 
-			if rs.Sub == "" {
-				panic("sub route Sub should not empty")
-			}
-
-			routePath := getRoutePath(routePath, rs.Path)
-			if rs.hasMiddleware() {
-				groupVal := n.gen("grp")
-				stmts = append(stmts, mustParseExprF(`%s := %s.Group("%s")`, groupVal, srIdent.Name, routePath))
-
-				srIdent = ast.NewIdent(groupVal)
-				routePath = "" // set for root route path
+				rIdent = groupIdent
+				rPath = ""
 			}
 
 			// sub
-			typeVar := n.gen(strings.ToLower(rs.Sub))
-			sub := rs.Sub
-			if imp != "" {
-				sub = imp + "." + sub
+			callObj := imp
+			if !r.isRootRoute() {
+				typeVar := n.gen(strings.ToLower(r.Name))
+				sub := r.Name
+				if imp != "" {
+					sub = imp + "." + sub
+				}
+				stmts = append(stmts, mustParseExprF(`%s := &%s{}`, typeVar, sub))
+				callObj = typeVar
 			}
-			stmts = append(stmts, mustParseExprF(`%s := &%s{}`, typeVar, sub))
 
-			if rstmts := injectSels(srIdent, rs.Sels, typeVar, routePath); len(rstmts) > 0 {
+			if rstmts := injectSels(rIdent, r.Sels, callObj, rPath); len(rstmts) > 0 {
 				stmts = append(stmts, rstmts...)
 			}
 		}
 
 		// sub packages
-		if hasMiddleware {
-			stmts = append(stmts, injectPkgRoute(rIdent, route.SubPackages, n)...)
+		if len(routePkg.SubPackages) > 0 {
+			stmts = append(stmts, injectPkgRoute(routePkgIdent, routePkg.SubPackages, n)...)
 		}
 	}
 
 	return stmts
 }
 
-func injectSels(ident *ast.Ident, sels []string, typeVar string, routePath string) []ast.Stmt {
+func injectSels(ident *ast.Ident, sels []string, callObj string, routePath string) []ast.Stmt {
 	var stmts []ast.Stmt
 
 	for _, sel := range sels {
 		var routeSel = sel
-		if typeVar != "" {
-			routeSel = typeVar + "." + routeSel
+		if callObj != "" {
+			routeSel = callObj + "." + routeSel
 		}
 
 		if sel == "Middleware" {

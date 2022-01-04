@@ -13,13 +13,40 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
-type SubRoute struct {
-	Sub  string
+type Route struct {
+	Name string
 	Sels []string
 	Path string // sub path
 }
 
-func (s *SubRoute) hasMiddleware() bool {
+func newRoute(name string, sels []string, opt *RouteTypeCustomOption) *Route {
+	r := &Route{
+		Name: name,
+		Sels: sels,
+	}
+	r.Path = r.routePathOpt(opt)
+	return r
+}
+
+func (s *Route) routePathOpt(opt *RouteTypeCustomOption) string {
+	path := ""
+	// sub route
+	if s.Name != "" {
+		// apply alias
+		if opt != nil && opt.PathComponentAlias != "" {
+			path = filepath.Join(path, opt.PathComponentAlias)
+		} else {
+			path = filepath.Join(path, kebabCaseString(s.Name))
+		}
+	}
+	return buildParamPath(path)
+}
+
+func (s *Route) isRootRoute() bool {
+	return s.Name == ""
+}
+
+func (s *Route) hasMiddleware() bool {
 	for _, sel := range s.Sels {
 		if sel == "Middleware" {
 			return true
@@ -32,29 +59,19 @@ type RoutePackage struct {
 	RelativePath      string
 	RelativeGroupPath string
 	PkgPath           string
-	Sels              []string
-	SubRoutes         []*SubRoute
+	Routes            []*Route
 	SubPackages       []*RoutePackage // for middleware
 
 	importSpec *ast.ImportSpec
 }
 
-func (r *RoutePackage) hasMiddleware() bool {
-	for _, sel := range r.Sels {
-		if sel == "Middleware" {
-			return true
+func (r *RoutePackage) rootRoute() *Route {
+	for _, route := range r.Routes {
+		if route.Name == "" {
+			return route
 		}
 	}
-
-	// for _, route := range r.SubRoutes {
-	// 	for _, sel := range route.Sels {
-	// 		if sel == "Middleware" {
-	// 			return true
-	// 		}
-	// 	}
-	// }
-
-	return false
+	return nil
 }
 
 func (r *RoutePackage) routePath() string {
@@ -62,7 +79,7 @@ func (r *RoutePackage) routePath() string {
 	if r.RelativeGroupPath != "" {
 		routePath = r.RelativeGroupPath
 	}
-	return getRoutePath(routePath)
+	return buildRoutePath(routePath)
 }
 
 type RouteTypeCustomOption struct {
@@ -129,7 +146,7 @@ func (r *routeGen) parseRoute(root string) []*RoutePackage {
 			for _, pkg := range pkgs {
 				if route := r.processPkgRouteSels(pkg, rel); route != nil {
 
-					if route.hasMiddleware() {
+					if rootRoute := route.rootRoute(); rootRoute != nil && rootRoute.hasMiddleware() {
 						fmt.Println("find middleware ->", path)
 
 						// push stack
@@ -214,22 +231,22 @@ func (r *routeGen) processPkgRouteSels(pkg *packages.Package, relativePath strin
 		PkgPath:      pkg.PkgPath,
 	}
 
-	// var subRouteSet []RouteSel
-	subRouteSet := make(map[string][]string)
+	// var routeNameSet []RouteSel
+	routeNameSet := make(map[string][]string)
 	for _, f := range pkg.Syntax {
 		ast.Inspect(f, func(n ast.Node) bool {
 			if fd, ok := n.(*ast.FuncDecl); ok {
 				sel := fd.Name.Name
 
 				if r.isTargetSelector(sel) {
+					routeName := ""
 					if rt := r.getFuncRecvType(fd); rt != nil {
 						if !isPublicVar(rt) && relativePath != "." {
 							return true
 						}
-						subRouteSet[rt.Name] = append(subRouteSet[rt.Name], sel)
-					} else {
-						route.Sels = append(route.Sels, sel)
+						routeName = rt.Name
 					}
+					routeNameSet[routeName] = append(routeNameSet[routeName], sel)
 
 					// fmt.Println("route", fd.Name, pkg.PkgPath)
 				}
@@ -238,36 +255,29 @@ func (r *routeGen) processPkgRouteSels(pkg *packages.Package, relativePath strin
 		})
 	}
 
-	// sort sels
-	route.Sels = r.sortSels(route.Sels)
-
-	// generate sub routes
-	if len(subRouteSet) > 0 {
+	// generate routes
+	if len(routeNameSet) > 0 {
 		options := r.processTypeOption(pkg)
-		rs := make([]*SubRoute, 0, len(subRouteSet))
+		rs := make([]*Route, 0, len(routeNameSet))
 
-		// sort sub route
-		subRouteKeys := make([]string, len(subRouteSet))
+		// sort route name
+		routeNameKeys := make([]string, len(routeNameSet))
 		i := 0
-		for k := range subRouteSet {
-			subRouteKeys[i] = k
+		for k := range routeNameSet {
+			routeNameKeys[i] = k
 			i++
 		}
-		sort.Strings(subRouteKeys)
-		for _, sub := range subRouteKeys {
-			sels := subRouteSet[sub]
-			opt := options[sub]
-			rs = append(rs, &SubRoute{
-				Sub:  sub,
-				Sels: r.sortSels(sels),
-				Path: getSubRoutePath(sub, opt),
-			})
+		sort.Strings(routeNameKeys) // TODO: confirm "" is first key
+		for _, rn := range routeNameKeys {
+			sels := routeNameSet[rn]
+			opt := options[rn]
+			rs = append(rs, newRoute(rn, r.sortSels(sels), opt))
 		}
 
-		route.SubRoutes = rs
+		route.Routes = rs
 	}
 
-	if len(route.Sels) == 0 && len(route.SubRoutes) == 0 {
+	if len(route.Routes) == 0 {
 		return nil
 	}
 
@@ -290,28 +300,12 @@ func (r *routeGen) sortSels(sels []string) []string {
 	return sorted
 }
 
-func getRoutePath(relativePath string, subPath ...string) string {
+func buildRoutePath(relativePath string, subPath ...string) string {
 	if relativePath == "." {
 		relativePath = ""
 	}
 	subPath = append([]string{"/", relativePath}, subPath...)
 	return buildParamPath(filepath.Join(subPath...))
-}
-
-func getSubRoutePath(sub string, opt *RouteTypeCustomOption) string {
-	path := ""
-
-	// sub route
-	if sub != "" {
-		// apply alias
-		if opt != nil && opt.PathComponentAlias != "" {
-			path = filepath.Join(path, opt.PathComponentAlias)
-		} else {
-			path = filepath.Join(path, kebabCaseString(sub))
-		}
-	}
-
-	return buildParamPath(path)
 }
 
 func buildParamPath(path string) string {
