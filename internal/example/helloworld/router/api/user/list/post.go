@@ -9,6 +9,10 @@ func POST(c *gin.Context) {
 type Action struct {
 }
 
+func (*Action) Middleware(g *gin.Context) {
+
+}
+
 func (*Action) GET(g *gin.Context) {
 
 }

@@ -11,11 +11,12 @@ import (
 	pbr_route2 "example.com/foo/router/about"
 	pbr_route3 "example.com/foo/router/api"
 	pbr_route4 "example.com/foo/router/api/post"
-	pbr_route5 "example.com/foo/router/api/user/_id"
-	pbr_route6 "example.com/foo/router/api/user/list"
-	pbr_route7 "example.com/foo/router/api/user/list/admin"
-	pbr_route8 "example.com/foo/router/api/yser"
-	pbr_route9 "example.com/foo/router/blog"
+	pbr_route5 "example.com/foo/router/api/user/_"
+	pbr_route6 "example.com/foo/router/api/user/_id"
+	pbr_route7 "example.com/foo/router/api/user/list"
+	pbr_route8 "example.com/foo/router/api/user/list/admin"
+	pbr_route9 "example.com/foo/router/api/yser"
+	pbr_route10 "example.com/foo/router/blog"
 )
 
 func Build(g *gin.Engine) {
@@ -27,28 +28,29 @@ func Build(g *gin.Engine) {
 	grp := g.Group("/api")
 	grp.Use(pbr_route3.Middleware)
 	grp.GET("/post", pbr_route4.GET)
+	action := &pbr_route4.Action{}
+	grp.GET("/post/action", action.GET)
 	blist := &pbr_route4.BList{}
 	grp.POST("/post/b-list", blist.POST)
 	list := &pbr_route4.List{}
 	grp.GET("/post/listavd", list.GET)
 	grp.POST("/post/listavd", list.POST)
-	action := &pbr_route4.Action{}
-	grp.GET("/post/action", action.GET)
-	grp.GET("/user/:id", pbr_route5.GET)
+	grp.GET("/user/*", pbr_route5.GET)
+	grp.GET("/user/:id", pbr_route6.GET)
 	grp2 := grp.Group("/user/list")
-	grp2.Use(pbr_route6.Middleware)
-	grp2.GET("", pbr_route6.GET)
-	grp2.POST("", pbr_route6.POST)
-	action2 := &pbr_route6.Action{}
-	grp2.GET("/action", action2.GET)
-	grp3 := grp2.Group("/admin")
-	grp3.Use(pbr_route7.Middleware)
-	grp3.GET("", pbr_route7.GET)
-	grp3.POST("", pbr_route7.POST)
-	action3 := &pbr_route7.Action{}
-	grp3.GET("/action", action3.GET)
-	grp.GET("/yser", pbr_route8.GET)
-	g.GET("/blog", pbr_route9.GET)
+	grp2.Use(pbr_route7.Middleware)
+	grp2.GET("", pbr_route7.GET)
+	grp2.POST("", pbr_route7.POST)
+	grp3 := grp2.Group("/action")
+	action2 := &pbr_route7.Action{}
+	grp3.Use(action2.Middleware)
+	grp3.GET("", action2.GET)
+	grp4 := grp2.Group("/admin")
+	grp4.Use(pbr_route8.Middleware)
+	action3 := &pbr_route8.Action{}
+	grp4.GET("/action", action3.GET)
+	grp.GET("/yser", pbr_route9.GET)
+	g.GET("/blog", pbr_route10.GET)
 }
 
 func Run() {

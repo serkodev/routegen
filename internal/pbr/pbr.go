@@ -234,8 +234,19 @@ func injectPkgRoute(ident *ast.Ident, routes []*RoutePackage, n *namer) []ast.St
 		}
 
 		for _, rs := range route.SubRoutes {
+			srIdent := rIdent
+
 			if rs.Sub == "" {
 				panic("sub route Sub should not empty")
+			}
+
+			routePath := getRoutePath(routePath, rs.Path)
+			if rs.hasMiddleware() {
+				groupVal := n.gen("grp")
+				stmts = append(stmts, mustParseExprF(`%s := %s.Group("%s")`, groupVal, srIdent.Name, routePath))
+
+				srIdent = ast.NewIdent(groupVal)
+				routePath = "" // set for root route path
 			}
 
 			// sub
@@ -246,9 +257,7 @@ func injectPkgRoute(ident *ast.Ident, routes []*RoutePackage, n *namer) []ast.St
 			}
 			stmts = append(stmts, mustParseExprF(`%s := &%s{}`, typeVar, sub))
 
-			routePath := getRoutePath(routePath, rs.Path)
-
-			if rstmts := injectSels(rIdent, rs.Sels, typeVar, routePath); len(rstmts) > 0 {
+			if rstmts := injectSels(srIdent, rs.Sels, typeVar, routePath); len(rstmts) > 0 {
 				stmts = append(stmts, rstmts...)
 			}
 		}
