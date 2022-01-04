@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 
 	"golang.org/x/tools/go/packages"
@@ -16,6 +17,15 @@ type SubRoute struct {
 	Sub  string
 	Sels []string
 	Path string // sub path
+}
+
+func (s *SubRoute) hasMiddleware() bool {
+	for _, sel := range s.Sels {
+		if sel == "Middleware" {
+			return true
+		}
+	}
+	return false
 }
 
 type RoutePackage struct {
@@ -235,7 +245,17 @@ func (r *routeGen) processPkgRouteSels(pkg *packages.Package, relativePath strin
 	if len(subRouteSet) > 0 {
 		options := r.processTypeOption(pkg)
 		rs := make([]*SubRoute, 0, len(subRouteSet))
-		for sub, sels := range subRouteSet {
+
+		// sort sub route
+		subRouteKeys := make([]string, len(subRouteSet))
+		i := 0
+		for k := range subRouteSet {
+			subRouteKeys[i] = k
+			i++
+		}
+		sort.Strings(subRouteKeys)
+		for _, sub := range subRouteKeys {
+			sels := subRouteSet[sub]
 			opt := options[sub]
 			rs = append(rs, &SubRoute{
 				Sub:  sub,
@@ -243,6 +263,7 @@ func (r *routeGen) processPkgRouteSels(pkg *packages.Package, relativePath strin
 				Path: getSubRoutePath(sub, opt),
 			})
 		}
+
 		route.SubRoutes = rs
 	}
 
@@ -296,7 +317,9 @@ func getSubRoutePath(sub string, opt *RouteTypeCustomOption) string {
 func buildParamPath(path string) string {
 	pathComponents := strings.Split(path, "/")
 	for i, pathComponent := range pathComponents {
-		if len(pathComponent) >= 2 {
+		if pathComponent == "_" {
+			pathComponents[i] = "*"
+		} else if len(pathComponent) >= 2 {
 			if pathComponent[0:2] == "__" {
 				pathComponents[i] = pathComponent[1:]
 			} else if pathComponent[0:1] == "_" {
