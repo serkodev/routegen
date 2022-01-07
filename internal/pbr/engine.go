@@ -10,30 +10,30 @@ import (
 	"io"
 )
 
-type Middleware struct {
+type middleware struct {
 	Selector  string `json:"selector"`
 	GroupExpr string `json:"group_expr"`
 	template  *template.Template
 }
 
-type Engine struct {
+type engine struct {
 	Types        []string          `json:"types"`
 	Selectors    []string          `json:"selectors"`
 	Expr         map[string]string `json:"expr"`
-	Middleware   *Middleware       `json:"middleware"`
+	Middleware   *middleware       `json:"middleware"`
 	exprTemplate map[string]*template.Template
 }
 
-//go:embed engine/gin.json
+//go:embed engineconfig/gin.json
 var ginJSON []byte
 
-func DefaultEngine() *Engine {
-	e, _ := NewEngine(ginJSON)
+func defaultEngine() *engine {
+	e, _ := newEngine(ginJSON)
 	return e
 }
 
-func NewEngine(data []byte) (*Engine, error) {
-	var e *Engine
+func newEngine(data []byte) (*engine, error) {
+	var e *engine
 	if err := json.Unmarshal(data, &e); err != nil {
 		return nil, err
 	}
@@ -60,7 +60,7 @@ func NewEngine(data []byte) (*Engine, error) {
 	return e, nil
 }
 
-func (e *Engine) ValidInjectType(t types.Type) bool {
+func (e *engine) ValidInjectType(t types.Type) bool {
 	if len(e.Types) == 0 {
 		return true
 	}
@@ -73,7 +73,7 @@ func (e *Engine) ValidInjectType(t types.Type) bool {
 	return false
 }
 
-func (e *Engine) TargetSels() []string {
+func (e *engine) TargetSels() []string {
 	sels := e.Selectors
 	if m := e.Middleware; m != nil {
 		sels = append([]string{m.Selector}, sels...)
@@ -81,14 +81,14 @@ func (e *Engine) TargetSels() []string {
 	return sels
 }
 
-func (e *Engine) MiddlewareSelector() string {
+func (e *engine) MiddlewareSelector() string {
 	if m := e.Middleware; m != nil {
 		return m.Selector
 	}
 	return ""
 }
 
-func (e *Engine) GenGroup(i *ast.Ident, route string) string {
+func (e *engine) GenGroup(i *ast.Ident, route string) string {
 	var expr bytes.Buffer
 	if err := e.Middleware.template.Execute(io.Writer(&expr), map[string]string{
 		"ident": i.Name,
@@ -99,7 +99,7 @@ func (e *Engine) GenGroup(i *ast.Ident, route string) string {
 	return expr.String()
 }
 
-func (e *Engine) GenSel(i *ast.Ident, sel string, route string, handle string) string {
+func (e *engine) GenSel(i *ast.Ident, sel string, route string, handle string) string {
 	t, ok := e.exprTemplate[sel]
 	if !ok {
 		t, ok = e.exprTemplate["_default"]

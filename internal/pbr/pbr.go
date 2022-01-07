@@ -15,12 +15,12 @@ import (
 )
 
 type gen struct {
-	engine    *Engine
+	engine    *engine
 	pkg       *packages.Package
 	buildFunc map[*ast.FuncDecl]bool
 }
 
-func newGen(pkg *packages.Package, buildFunc map[*ast.FuncDecl]bool, engine *Engine) *gen {
+func newGen(pkg *packages.Package, buildFunc map[*ast.FuncDecl]bool, engine *engine) *gen {
 	return &gen{
 		engine:    engine,
 		pkg:       pkg,
@@ -77,7 +77,7 @@ func Load() error {
 			})
 
 			if len(buildFuncs) > 0 {
-				e := DefaultEngine()
+				e := defaultEngine()
 
 				r := newRouteGen(e)
 				routes := r.parseRoute(wd)
@@ -169,12 +169,6 @@ func (g *gen) inject(f *ast.File, routes []*RoutePackage) {
 		// inject imports
 		if imp, ok := c.Node().(*ast.ImportSpec); ok {
 			if imp.Path.Value == `"github.com/serkodev/pbr"` {
-				// for i := len(routes) - 1; i >= 0; i-- {
-				// 	routeImp := routes[i]
-				// 	if routeImp.importSpec != nil {
-				// 		c.InsertAfter(routeImp.importSpec)
-				// 	}
-				// }
 				for i := len(specs) - 1; i >= 0; i-- {
 					c.InsertAfter(specs[i])
 				}
@@ -212,8 +206,6 @@ func (g *gen) injectFunction(fn *ast.FuncDecl, routes []*RoutePackage) error {
 		}
 		return true
 	}, nil)
-	// printAST(token.NewFileSet(), fn.Body)
-
 	return nil
 }
 

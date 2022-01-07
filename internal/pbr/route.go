@@ -97,14 +97,14 @@ type routeGroup struct {
 }
 
 type routeGen struct {
-	engine     *Engine
+	engine     *engine
 	targetSels []string // sorted target selectors
 	sels       map[string]struct{}
 }
 
 var pbrRegex = regexp.MustCompile(`^//\s*pbr\s+(.*)$`)
 
-func newRouteGen(e *Engine) *routeGen {
+func newRouteGen(e *engine) *routeGen {
 	r := &routeGen{
 		engine:     e,
 		targetSels: e.TargetSels(),
