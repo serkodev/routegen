@@ -1,0 +1,19 @@
+{
+  "types": [
+    "*github.com/gin-gonic/gin.Engine"
+  ],
+  "selectors": [
+    "Request",
+    "GET",
+    "POST"
+  ],
+  "expr": {
+    "Middleware": "{{ .ident }}.Use({{ .handle }})",
+    "Request": "{{ .ident }}.Any(\"{{ .route }}\", {{ .handle }})",
+    "_default": "{{ .ident }}.{{ .sel }}(\"{{ .route }}\", {{ .handle }})"
+  },
+  "middleware": {
+    "selector": "Middleware",
+    "group_expr": "{{ .ident }}.Group(\"{{ .route }}\")"
+  }
+}

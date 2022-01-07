@@ -7,8 +7,8 @@ import (
 	"github.com/serkodev/pbr"
 )
 
-func Build(g *gin.Engine) { // gin.RouterGroup
-	pbr.Build(g)
+func Build(grp *gin.Engine) { // gin.RouterGroup
+	pbr.Build(grp)
 }
 
 func Run() {

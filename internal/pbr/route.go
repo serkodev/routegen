@@ -14,15 +14,17 @@ import (
 )
 
 type Route struct {
-	Name string
-	Sels []string
-	Path string // sub path
+	Name          string
+	Sels          []string
+	Path          string // sub path
+	middlewareSel string
 }
 
-func newRoute(name string, sels []string, opt *RouteTypeCustomOption) *Route {
+func newRoute(name string, sels []string, middlewareSel string, opt *RouteTypeCustomOption) *Route {
 	r := &Route{
-		Name: name,
-		Sels: sels,
+		Name:          name,
+		Sels:          sels,
+		middlewareSel: middlewareSel,
 	}
 	r.Path = r.routePathOpt(opt)
 	return r
@@ -47,8 +49,11 @@ func (s *Route) isRootRoute() bool {
 }
 
 func (s *Route) hasMiddleware() bool {
+	if s.middlewareSel == "" {
+		return false
+	}
 	for _, sel := range s.Sels {
-		if sel == "Middleware" {
+		if sel == s.middlewareSel {
 			return true
 		}
 	}
@@ -92,15 +97,17 @@ type routeGroup struct {
 }
 
 type routeGen struct {
+	engine     *Engine
 	targetSels []string // sorted target selectors
 	sels       map[string]struct{}
 }
 
 var pbrRegex = regexp.MustCompile(`^//\s*pbr\s+(.*)$`)
 
-func newRouteGen() *routeGen {
+func newRouteGen(e *Engine) *routeGen {
 	r := &routeGen{
-		targetSels: []string{"Middleware", "GET", "POST", "HANDLE"},
+		engine:     e,
+		targetSels: e.TargetSels(),
 	}
 	set := make(map[string]struct{}, len(r.targetSels))
 	for _, s := range r.targetSels {
@@ -241,6 +248,7 @@ func (r *routeGen) processPkgRouteSels(pkg *packages.Package, relativePath strin
 				if r.isTargetSelector(sel) {
 					routeName := ""
 					if rt := r.getFuncRecvType(fd); rt != nil {
+						// TODO: relativePath normalize
 						if !isPublicVar(rt) && relativePath != "." {
 							return true
 						}
@@ -267,11 +275,11 @@ func (r *routeGen) processPkgRouteSels(pkg *packages.Package, relativePath strin
 			routeNameKeys[i] = k
 			i++
 		}
-		sort.Strings(routeNameKeys) // TODO: confirm "" is first key
+		sort.Strings(routeNameKeys)
 		for _, rn := range routeNameKeys {
 			sels := routeNameSet[rn]
 			opt := options[rn]
-			rs = append(rs, newRoute(rn, r.sortSels(sels), opt))
+			rs = append(rs, newRoute(rn, r.sortSels(sels), r.engine.MiddlewareSelector(), opt))
 		}
 
 		route.Routes = rs

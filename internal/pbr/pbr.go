@@ -15,12 +15,14 @@ import (
 )
 
 type gen struct {
+	engine    *Engine
 	pkg       *packages.Package
 	buildFunc map[*ast.FuncDecl]bool
 }
 
-func newGen(pkg *packages.Package, buildFunc map[*ast.FuncDecl]bool) *gen {
+func newGen(pkg *packages.Package, buildFunc map[*ast.FuncDecl]bool, engine *Engine) *gen {
 	return &gen{
+		engine:    engine,
 		pkg:       pkg,
 		buildFunc: buildFunc,
 	}
@@ -75,10 +77,12 @@ func Load() error {
 			})
 
 			if len(buildFuncs) > 0 {
-				r := newRouteGen()
+				e := DefaultEngine()
+
+				r := newRouteGen(e)
 				routes := r.parseRoute(wd)
 
-				g := newGen(pkg, buildFuncs)
+				g := newGen(pkg, buildFuncs, e)
 				g.inject(f, routes)
 			}
 		}
@@ -191,13 +195,19 @@ func (g *gen) injectFunction(fn *ast.FuncDecl, routes []*RoutePackage) error {
 	astutil.Apply(fn.Body, func(c *astutil.Cursor) bool {
 		if stmt, ok := c.Node().(ast.Stmt); ok {
 			if s := getInjectorStmt(g.pkg.TypesInfo, stmt); s != nil {
-				ident := s.Args[0].(*ast.Ident)
-				scope := g.pkg.TypesInfo.Scopes[fn.Type]
-				n := newNamer(scope)
-				for _, stmt := range injectPkgRoute(ident, routes, n) {
-					c.InsertBefore(stmt)
+				for _, arg := range s.Args {
+					obj := qualifiedIdentObject(g.pkg.TypesInfo, arg)
+					if obj != nil && g.engine.ValidInjectType(obj.Type()) {
+						ident := arg.(*ast.Ident)
+						scope := g.pkg.TypesInfo.Scopes[fn.Type]
+						n := newNamer(scope)
+						for _, stmt := range g.injectPkgRoute(ident, routes, n) {
+							c.InsertBefore(stmt)
+						}
+						c.Delete()
+						return true
+					}
 				}
-				c.Delete()
 			}
 		}
 		return true
@@ -207,7 +217,7 @@ func (g *gen) injectFunction(fn *ast.FuncDecl, routes []*RoutePackage) error {
 	return nil
 }
 
-func injectPkgRoute(ident *ast.Ident, routePkgs []*RoutePackage, n *namer) []ast.Stmt {
+func (g *gen) injectPkgRoute(ident *ast.Ident, routePkgs []*RoutePackage, n *namer) []ast.Stmt {
 	var stmts []ast.Stmt
 
 	for _, routePkg := range routePkgs {
@@ -223,7 +233,7 @@ func injectPkgRoute(ident *ast.Ident, routePkgs []*RoutePackage, n *namer) []ast
 			rIdent := routePkgIdent
 			rPath := buildRoutePath(routePkgPath, r.Path)
 
-			if r.hasMiddleware() {
+			if r.hasMiddleware() && g.engine.Middleware != nil {
 				var groupIdent = ast.NewIdent(n.gen("grp"))
 				var groupRoutePath = rPath
 
@@ -235,7 +245,9 @@ func injectPkgRoute(ident *ast.Ident, routePkgs []*RoutePackage, n *namer) []ast
 					routePkgPath = ""
 				}
 
-				stmts = append(stmts, mustParseExprF(`%s := %s.Group("%s")`, groupIdent.Name, rIdent.Name, groupRoutePath))
+				// generate expr with template
+				expr := g.engine.GenGroup(rIdent, groupRoutePath)
+				stmts = append(stmts, mustParseExprF(`%s := %s`, groupIdent.Name, expr))
 
 				rIdent = groupIdent
 				rPath = ""
@@ -253,33 +265,32 @@ func injectPkgRoute(ident *ast.Ident, routePkgs []*RoutePackage, n *namer) []ast
 				callObj = typeVar
 			}
 
-			if rstmts := injectSels(rIdent, r.Sels, callObj, rPath); len(rstmts) > 0 {
+			if rstmts := g.injectSels(rIdent, r.Sels, callObj, rPath); len(rstmts) > 0 {
 				stmts = append(stmts, rstmts...)
 			}
 		}
 
 		// sub packages
 		if len(routePkg.SubPackages) > 0 {
-			stmts = append(stmts, injectPkgRoute(routePkgIdent, routePkg.SubPackages, n)...)
+			stmts = append(stmts, g.injectPkgRoute(routePkgIdent, routePkg.SubPackages, n)...)
 		}
 	}
 
 	return stmts
 }
 
-func injectSels(ident *ast.Ident, sels []string, callObj string, routePath string) []ast.Stmt {
+func (g *gen) injectSels(ident *ast.Ident, sels []string, callObj string, routePath string) []ast.Stmt {
 	var stmts []ast.Stmt
 
 	for _, sel := range sels {
-		var routeSel = sel
+		var handle = sel
 		if callObj != "" {
-			routeSel = callObj + "." + routeSel
+			handle = callObj + "." + handle
 		}
 
-		if sel == "Middleware" {
-			stmts = append(stmts, mustParseExprF(`%s.Use(%s)`, ident.Name, routeSel))
-		} else {
-			stmts = append(stmts, mustParseExprF(`%s.%s("%s", %s)`, ident.Name, sel, routePath, routeSel))
+		expr := g.engine.GenSel(ident, sel, routePath, handle)
+		if expr != "" {
+			stmts = append(stmts, mustParseExpr(expr))
 		}
 	}
 

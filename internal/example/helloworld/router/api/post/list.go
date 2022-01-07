@@ -3,7 +3,7 @@ package post
 import "github.com/gin-gonic/gin"
 
 // foo bar comment
-// pbr alias=listavd
+// pbr alias=hello
 type List struct {
 	// abc
 }
