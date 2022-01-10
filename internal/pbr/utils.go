@@ -35,6 +35,18 @@ func mustParseExpr(expr string) ast.Stmt {
 	return stmt
 }
 
+func parseExprs(expr string) ([]ast.Stmt, error) {
+	c, err := parser.ParseExpr(expr)
+	if err != nil {
+		e, err := parser.ParseExpr("func(){\n" + expr + "\n}")
+		if err != nil {
+			return nil, err
+		}
+		return e.(*ast.FuncLit).Body.List, nil
+	}
+	return []ast.Stmt{&ast.ExprStmt{X: c}}, nil
+}
+
 func parseExpr(expr string) (ast.Stmt, error) {
 	c, err := parser.ParseExpr(expr)
 	if err != nil {

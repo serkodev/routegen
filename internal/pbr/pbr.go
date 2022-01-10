@@ -14,15 +14,18 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
-type gen struct {
+type injectConfig struct {
 	engine *engine
+	ident  *ast.Ident
+}
+
+type gen struct {
 	pkg    *packages.Package
 	routes []*RoutePackage
 }
 
-func newGen(engine *engine, pkg *packages.Package, routes []*RoutePackage) *gen {
+func newGen(pkg *packages.Package, routes []*RoutePackage) *gen {
 	return &gen{
-		engine: engine,
 		pkg:    pkg,
 		routes: routes,
 	}
@@ -63,7 +66,7 @@ func Load() error {
 		fmt.Println("path", pkg.PkgPath)
 
 		for _, f := range pkg.Syntax {
-			buildFuncs := make(map[*ast.FuncDecl]bool)
+			injectFuncsConfigSet := make(map[*ast.FuncDecl]*injectConfig)
 
 			ast.Inspect(f, func(n ast.Node) bool {
 				fn, ok := n.(*ast.FuncDecl)
@@ -71,19 +74,32 @@ func Load() error {
 					return true
 				}
 
-				if buildCall, err := findInjectorBuild(pkg.TypesInfo, fn); err != nil {
+				buildCall, err := findInjectorBuild(pkg.TypesInfo, fn)
+				if err != nil {
 					fmt.Println("findInjectorBuild error", err.Error())
 					return true
-				} else if buildCall != nil {
-					// inject build found
-					buildFuncs[fn] = true
+				}
+
+				if buildCall != nil {
+					// inject build found, assign engine
+					for _, arg := range buildCall.Args {
+						obj := qualifiedIdentObject(pkg.TypesInfo, arg)
+						// TODO: loop engine list
+						if obj != nil && e.ValidInjectType(obj.Type()) {
+							injectFuncsConfigSet[fn] = &injectConfig{
+								ident:  arg.(*ast.Ident),
+								engine: e,
+							}
+							return true
+						}
+					}
 				}
 				return true
 			})
 
-			if len(buildFuncs) > 0 {
-				g := newGen(e, pkg, routes)
-				g.inject(f, buildFuncs)
+			if len(injectFuncsConfigSet) > 0 {
+				g := newGen(pkg, routes)
+				g.inject(f, injectFuncsConfigSet)
 			}
 		}
 	}
@@ -132,10 +148,10 @@ func (g *gen) generate(f *ast.File) error {
 	return nil
 }
 
-func (g *gen) inject(f *ast.File, buildFunc map[*ast.FuncDecl]bool) {
+func (g *gen) inject(f *ast.File, injectFuncsConfigSet map[*ast.FuncDecl]*injectConfig) {
 	// build imports
-	scopes := make([]*types.Scope, len(buildFunc))
-	for fn := range buildFunc {
+	scopes := make([]*types.Scope, len(injectFuncsConfigSet))
+	for fn := range injectFuncsConfigSet {
 		scopes = append(scopes, g.pkg.TypesInfo.Scopes[fn.Type])
 	}
 	n := newNamerWithScopes(scopes)
@@ -152,28 +168,14 @@ func (g *gen) inject(f *ast.File, buildFunc map[*ast.FuncDecl]bool) {
 			}
 		} else if fn, ok := c.Node().(*ast.FuncDecl); ok {
 			// inject body
-			if buildFunc[fn] {
-				// TODO: load config first, then replace the fn.Body
-				astutil.Apply(fn.Body, func(c *astutil.Cursor) bool {
-					if stmt, ok := c.Node().(ast.Stmt); ok {
-						if s := getInjectorStmt(g.pkg.TypesInfo, stmt); s != nil {
-							for _, arg := range s.Args {
-								obj := qualifiedIdentObject(g.pkg.TypesInfo, arg)
-								if obj != nil && g.engine.ValidInjectType(obj.Type()) {
-									ident := arg.(*ast.Ident)
-									scope := g.pkg.TypesInfo.Scopes[fn.Type]
-									n := newNamer(scope)
-									for _, stmt := range g.buildInjectStmts(ident, g.routes, routePackagesImports, n) {
-										c.InsertBefore(stmt)
-									}
-									c.Delete()
-									return true
-								}
-							}
-						}
-					}
-					return true
-				}, nil)
+			if injectConfig, ok := injectFuncsConfigSet[fn]; ok {
+				ident := injectConfig.ident
+				scope := g.pkg.TypesInfo.Scopes[fn.Type]
+				n := newNamer(scope)
+				stmts := g.buildInjectStmts(injectConfig.engine, ident, g.routes, routePackagesImports, n)
+
+				block := &ast.BlockStmt{List: stmts}
+				fn.Body = block
 			}
 		}
 		return true
@@ -210,7 +212,7 @@ func (g *gen) importsFromRoutes(routes []*RoutePackage, n *namer) ([]*ast.Import
 	return specs, routePackagesImports
 }
 
-func (g *gen) buildInjectStmts(ident *ast.Ident, routePkgs []*RoutePackage, routePackagesImports map[*RoutePackage]*ast.ImportSpec, n *namer) []ast.Stmt {
+func (g *gen) buildInjectStmts(e *engine, ident *ast.Ident, routePkgs []*RoutePackage, routePackagesImports map[*RoutePackage]*ast.ImportSpec, n *namer) []ast.Stmt {
 	var stmts []ast.Stmt
 
 	for _, routePkg := range routePkgs {
@@ -226,7 +228,7 @@ func (g *gen) buildInjectStmts(ident *ast.Ident, routePkgs []*RoutePackage, rout
 			rIdent := routePkgIdent
 			rPath := buildRoutePath(routePkgPath, r.Path)
 
-			if r.hasMiddleware() && g.engine.Middleware != nil {
+			if r.hasMiddleware() && e.Middleware != nil {
 				var groupIdent = ast.NewIdent(n.gen("grp"))
 				var groupRoutePath = rPath
 
@@ -239,15 +241,16 @@ func (g *gen) buildInjectStmts(ident *ast.Ident, routePkgs []*RoutePackage, rout
 				}
 
 				// generate expr with template
-				expr := g.engine.GenGroup(rIdent, groupRoutePath)
+				expr := e.GenGroup(rIdent, groupRoutePath)
 				stmts = append(stmts, mustParseExprF(`%s := %s`, groupIdent.Name, expr))
 
 				rIdent = groupIdent
 				rPath = ""
 			}
 
-			// sub
 			callObj := imp
+
+			// sub
 			if !r.isRootRoute() {
 				typeVar := n.gen(strings.ToLower(r.Name))
 				sub := r.Name
@@ -258,32 +261,21 @@ func (g *gen) buildInjectStmts(ident *ast.Ident, routePkgs []*RoutePackage, rout
 				callObj = typeVar
 			}
 
-			if rstmts := g.buildInjectSels(rIdent, r.Sels, callObj, rPath); len(rstmts) > 0 {
-				stmts = append(stmts, rstmts...)
+			// build sels
+			for _, sel := range r.Sels {
+				var selector = sel
+				if callObj != "" {
+					selector = callObj + "." + selector
+				}
+				if expr := e.GenSel(rIdent, sel, rPath, selector); expr != "" {
+					stmts = append(stmts, mustParseExpr(expr))
+				}
 			}
 		}
 
 		// sub packages
 		if len(routePkg.SubPackages) > 0 {
-			stmts = append(stmts, g.buildInjectStmts(routePkgIdent, routePkg.SubPackages, routePackagesImports, n)...)
-		}
-	}
-
-	return stmts
-}
-
-func (g *gen) buildInjectSels(ident *ast.Ident, sels []string, callObj string, routePath string) []ast.Stmt {
-	var stmts []ast.Stmt
-
-	for _, sel := range sels {
-		var handle = sel
-		if callObj != "" {
-			handle = callObj + "." + handle
-		}
-
-		expr := g.engine.GenSel(ident, sel, routePath, handle)
-		if expr != "" {
-			stmts = append(stmts, mustParseExpr(expr))
+			stmts = append(stmts, g.buildInjectStmts(e, routePkgIdent, routePkg.SubPackages, routePackagesImports, n)...)
 		}
 	}
 
