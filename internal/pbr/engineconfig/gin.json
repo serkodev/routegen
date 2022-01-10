@@ -1,6 +1,7 @@
 {
   "types": [
-    "*github.com/gin-gonic/gin.Engine"
+    "*github.com/gin-gonic/gin.Engine",
+    "*github.com/gin-gonic/gin.RouterGroup"
   ],
   "selectors": [
     "Request",

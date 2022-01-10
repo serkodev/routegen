@@ -15,16 +15,16 @@ import (
 )
 
 type gen struct {
-	engine    *engine
-	pkg       *packages.Package
-	buildFunc map[*ast.FuncDecl]bool
+	engine *engine
+	pkg    *packages.Package
+	routes []*RoutePackage
 }
 
-func newGen(pkg *packages.Package, buildFunc map[*ast.FuncDecl]bool, engine *engine) *gen {
+func newGen(engine *engine, pkg *packages.Package, routes []*RoutePackage) *gen {
 	return &gen{
-		engine:    engine,
-		pkg:       pkg,
-		buildFunc: buildFunc,
+		engine: engine,
+		pkg:    pkg,
+		routes: routes,
 	}
 }
 
@@ -54,6 +54,11 @@ func Load() error {
 		return err
 	}
 
+	// TODO: lazy load
+	e := defaultEngine()
+	r := newRouteGen(e.TargetSels(), e.MiddlewareSelector())
+	routes := r.parseRoute(wd)
+
 	for _, pkg := range pkgs {
 		fmt.Println("path", pkg.PkgPath)
 
@@ -77,13 +82,8 @@ func Load() error {
 			})
 
 			if len(buildFuncs) > 0 {
-				e := defaultEngine()
-
-				r := newRouteGen(e)
-				routes := r.parseRoute(wd)
-
-				g := newGen(pkg, buildFuncs, e)
-				g.inject(f, routes)
+				g := newGen(e, pkg, routes)
+				g.inject(f, buildFuncs)
 			}
 		}
 	}
@@ -132,10 +132,59 @@ func (g *gen) generate(f *ast.File) error {
 	return nil
 }
 
-func (g *gen) importsFromRoutes(routes []*RoutePackage, n *namer) []*ast.ImportSpec {
-	var specs []*ast.ImportSpec
+func (g *gen) inject(f *ast.File, buildFunc map[*ast.FuncDecl]bool) {
+	// build imports
+	scopes := make([]*types.Scope, len(buildFunc))
+	for fn := range buildFunc {
+		scopes = append(scopes, g.pkg.TypesInfo.Scopes[fn.Type])
+	}
+	n := newNamerWithScopes(scopes)
+	specs, routePackagesImports := g.importsFromRoutes(g.routes, n)
 
-	// TODO: check original imported pkg
+	astutil.Apply(f, func(c *astutil.Cursor) bool {
+		if imp, ok := c.Node().(*ast.ImportSpec); ok {
+			// inject imports
+			if imp.Path.Value == `"github.com/serkodev/pbr"` {
+				for _, spec := range specs {
+					c.InsertBefore(spec)
+				}
+				c.Delete()
+			}
+		} else if fn, ok := c.Node().(*ast.FuncDecl); ok {
+			// inject body
+			if buildFunc[fn] {
+				// TODO: load config first, then replace the fn.Body
+				astutil.Apply(fn.Body, func(c *astutil.Cursor) bool {
+					if stmt, ok := c.Node().(ast.Stmt); ok {
+						if s := getInjectorStmt(g.pkg.TypesInfo, stmt); s != nil {
+							for _, arg := range s.Args {
+								obj := qualifiedIdentObject(g.pkg.TypesInfo, arg)
+								if obj != nil && g.engine.ValidInjectType(obj.Type()) {
+									ident := arg.(*ast.Ident)
+									scope := g.pkg.TypesInfo.Scopes[fn.Type]
+									n := newNamer(scope)
+									for _, stmt := range g.buildInjectStmts(ident, g.routes, routePackagesImports, n) {
+										c.InsertBefore(stmt)
+									}
+									c.Delete()
+									return true
+								}
+							}
+						}
+					}
+					return true
+				}, nil)
+			}
+		}
+		return true
+	}, nil)
+
+	g.generate(f)
+}
+
+func (g *gen) importsFromRoutes(routes []*RoutePackage, n *namer) ([]*ast.ImportSpec, map[*RoutePackage]*ast.ImportSpec) {
+	var specs []*ast.ImportSpec
+	routePackagesImports := make(map[*RoutePackage]*ast.ImportSpec)
 	for _, r := range routes {
 		if r.RelativePath != "." {
 			newName := n.gen("pbr_route")
@@ -146,70 +195,22 @@ func (g *gen) importsFromRoutes(routes []*RoutePackage, n *namer) []*ast.ImportS
 				},
 				Name: ast.NewIdent(newName),
 			}
-			r.importSpec = spec
+			routePackagesImports[r] = spec
 			specs = append(specs, spec)
 		}
+		// sub packages
 		if len(r.SubPackages) > 0 {
-			specs = append(specs, g.importsFromRoutes(r.SubPackages, n)...)
+			subSpecs, subImports := g.importsFromRoutes(r.SubPackages, n)
+			specs = append(specs, subSpecs...)
+			for k, v := range subImports {
+				routePackagesImports[k] = v
+			}
 		}
 	}
-
-	return specs
+	return specs, routePackagesImports
 }
 
-func (g *gen) inject(f *ast.File, routes []*RoutePackage) {
-	scopes := make([]*types.Scope, len(g.buildFunc))
-	for fn := range g.buildFunc {
-		scopes = append(scopes, g.pkg.TypesInfo.Scopes[fn.Type])
-	}
-	n := newNamerWithScopes(scopes)
-	specs := g.importsFromRoutes(routes, n)
-
-	astutil.Apply(f, func(c *astutil.Cursor) bool {
-		// inject imports
-		if imp, ok := c.Node().(*ast.ImportSpec); ok {
-			if imp.Path.Value == `"github.com/serkodev/pbr"` {
-				for i := len(specs) - 1; i >= 0; i-- {
-					c.InsertAfter(specs[i])
-				}
-				c.Delete()
-			}
-		} else if fn, ok := c.Node().(*ast.FuncDecl); ok {
-			if g.buildFunc[fn] {
-				g.injectFunction(fn, routes)
-			}
-		}
-		return true
-	}, nil)
-
-	g.generate(f)
-}
-
-func (g *gen) injectFunction(fn *ast.FuncDecl, routes []*RoutePackage) error {
-	astutil.Apply(fn.Body, func(c *astutil.Cursor) bool {
-		if stmt, ok := c.Node().(ast.Stmt); ok {
-			if s := getInjectorStmt(g.pkg.TypesInfo, stmt); s != nil {
-				for _, arg := range s.Args {
-					obj := qualifiedIdentObject(g.pkg.TypesInfo, arg)
-					if obj != nil && g.engine.ValidInjectType(obj.Type()) {
-						ident := arg.(*ast.Ident)
-						scope := g.pkg.TypesInfo.Scopes[fn.Type]
-						n := newNamer(scope)
-						for _, stmt := range g.injectPkgRoute(ident, routes, n) {
-							c.InsertBefore(stmt)
-						}
-						c.Delete()
-						return true
-					}
-				}
-			}
-		}
-		return true
-	}, nil)
-	return nil
-}
-
-func (g *gen) injectPkgRoute(ident *ast.Ident, routePkgs []*RoutePackage, n *namer) []ast.Stmt {
+func (g *gen) buildInjectStmts(ident *ast.Ident, routePkgs []*RoutePackage, routePackagesImports map[*RoutePackage]*ast.ImportSpec, n *namer) []ast.Stmt {
 	var stmts []ast.Stmt
 
 	for _, routePkg := range routePkgs {
@@ -217,7 +218,7 @@ func (g *gen) injectPkgRoute(ident *ast.Ident, routePkgs []*RoutePackage, n *nam
 		routePkgPath := routePkg.routePath()
 
 		imp := ""
-		if routeImport := routePkg.importSpec; routeImport != nil {
+		if routeImport, ok := routePackagesImports[routePkg]; ok {
 			imp = routeImport.Name.Name
 		}
 
@@ -257,21 +258,21 @@ func (g *gen) injectPkgRoute(ident *ast.Ident, routePkgs []*RoutePackage, n *nam
 				callObj = typeVar
 			}
 
-			if rstmts := g.injectSels(rIdent, r.Sels, callObj, rPath); len(rstmts) > 0 {
+			if rstmts := g.buildInjectSels(rIdent, r.Sels, callObj, rPath); len(rstmts) > 0 {
 				stmts = append(stmts, rstmts...)
 			}
 		}
 
 		// sub packages
 		if len(routePkg.SubPackages) > 0 {
-			stmts = append(stmts, g.injectPkgRoute(routePkgIdent, routePkg.SubPackages, n)...)
+			stmts = append(stmts, g.buildInjectStmts(routePkgIdent, routePkg.SubPackages, routePackagesImports, n)...)
 		}
 	}
 
 	return stmts
 }
 
-func (g *gen) injectSels(ident *ast.Ident, sels []string, callObj string, routePath string) []ast.Stmt {
+func (g *gen) buildInjectSels(ident *ast.Ident, sels []string, callObj string, routePath string) []ast.Stmt {
 	var stmts []ast.Stmt
 
 	for _, sel := range sels {

@@ -66,8 +66,6 @@ type RoutePackage struct {
 	PkgPath           string
 	Routes            []*Route
 	SubPackages       []*RoutePackage // for middleware
-
-	importSpec *ast.ImportSpec
 }
 
 func (r *RoutePackage) rootRoute() *Route {
@@ -97,17 +95,17 @@ type routeGroup struct {
 }
 
 type routeGen struct {
-	engine     *engine
-	targetSels []string // sorted target selectors
-	sels       map[string]struct{}
+	middlewareSel string
+	targetSels    []string // sorted target selectors
+	sels          map[string]struct{}
 }
 
 var pbrRegex = regexp.MustCompile(`^//\s*pbr\s+(.*)$`)
 
-func newRouteGen(e *engine) *routeGen {
+func newRouteGen(targetSelectors []string, middlewareSelector string) *routeGen {
 	r := &routeGen{
-		engine:     e,
-		targetSels: e.TargetSels(),
+		targetSels:    targetSelectors,
+		middlewareSel: middlewareSelector,
 	}
 	set := make(map[string]struct{}, len(r.targetSels))
 	for _, s := range r.targetSels {
@@ -279,7 +277,7 @@ func (r *routeGen) processPkgRouteSels(pkg *packages.Package, relativePath strin
 		for _, rn := range routeNameKeys {
 			sels := routeNameSet[rn]
 			opt := options[rn]
-			rs = append(rs, newRoute(rn, r.sortSels(sels), r.engine.MiddlewareSelector(), opt))
+			rs = append(rs, newRoute(rn, r.sortSels(sels), r.middlewareSel, opt))
 		}
 
 		route.Routes = rs
