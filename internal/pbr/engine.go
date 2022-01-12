@@ -10,6 +10,34 @@ import (
 	"io"
 )
 
+//go:embed engineconfig/gin.json
+var ginJSON []byte
+
+//go:embed engineconfig/echo.json
+var echoJSON []byte
+
+type engineManager struct {
+	engines []*engine
+}
+
+func newEngineManager() *engineManager {
+	return &engineManager{
+		engines: []*engine{
+			mustNewEngine(ginJSON),
+			mustNewEngine(echoJSON),
+		},
+	}
+}
+
+func (m *engineManager) matchEngine(obj types.Object) *engine {
+	for _, e := range m.engines {
+		if e.ValidInjectType(obj.Type()) {
+			return e
+		}
+	}
+	return nil
+}
+
 type middleware struct {
 	Selector  string `json:"selector"`
 	GroupExpr string `json:"group_expr"`
@@ -24,8 +52,13 @@ type engine struct {
 	exprTemplate map[string]*template.Template
 }
 
-//go:embed engineconfig/gin.json
-var ginJSON []byte
+func mustNewEngine(data []byte) *engine {
+	if e, err := newEngine(data); err != nil {
+		panic("cannot parse engine")
+	} else {
+		return e
+	}
+}
 
 func newEngine(data []byte) (*engine, error) {
 	var e *engine
@@ -113,26 +146,4 @@ func (e *engine) GenSel(i *ast.Ident, sel string, route string, handle string) s
 		panic("generate expr error")
 	}
 	return expr.String()
-}
-
-type engineManager struct {
-	engines []*engine
-}
-
-func newEngineManager() *engineManager {
-	e, _ := newEngine(ginJSON)
-	return &engineManager{
-		engines: []*engine{
-			e,
-		},
-	}
-}
-
-func (m *engineManager) matchEngine(obj types.Object) *engine {
-	for _, e := range m.engines {
-		if e.ValidInjectType(obj.Type()) {
-			return e
-		}
-	}
-	return nil
 }

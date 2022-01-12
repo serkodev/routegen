@@ -1,7 +1,6 @@
 {
   "types": [
-    "*github.com/gin-gonic/gin.Engine",
-    "*github.com/gin-gonic/gin.RouterGroup"
+    "*github.com/labstack/echo.Echo"
   ],
   "selectors": [
     "Request",
@@ -11,7 +10,9 @@
     "PATCH",
     "PUT",
     "OPTIONS",
-    "HEAD"
+    "HEAD",
+    "CONNECT",
+    "TRACE"
   ],
   "expr": {
     "Middleware": "{{ .ident }}.Use({{ .handle }})",
