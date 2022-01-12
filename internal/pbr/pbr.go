@@ -14,11 +14,6 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
-type injectConfig struct {
-	engine *engine
-	ident  *ast.Ident
-}
-
 type gen struct {
 	pkg    *packages.Package
 	routes []*RoutePackage
@@ -47,14 +42,14 @@ func Load(wd string, env []string) error {
 		return err
 	}
 
-	// TODO: lazy load
-	engines := defaultEngines()
+	var engine *engine
+	em := newEngineManager()
 
 	for _, pkg := range pkgs {
 		fmt.Println("path", pkg.PkgPath)
 
 		for _, f := range pkg.Syntax {
-			injectFuncsConfigSet := make(map[*ast.FuncDecl]*injectConfig)
+			injectFuncsIdentSet := make(map[*ast.FuncDecl]*ast.Ident)
 
 			ast.Inspect(f, func(n ast.Node) bool {
 				fn, ok := n.(*ast.FuncDecl)
@@ -72,14 +67,13 @@ func Load(wd string, env []string) error {
 					// inject build found, assign engine
 					for _, arg := range buildCall.Args {
 						if obj := qualifiedIdentObject(pkg.TypesInfo, arg); obj != nil {
-							for _, e := range engines {
-								if e.ValidInjectType(obj.Type()) {
-									injectFuncsConfigSet[fn] = &injectConfig{
-										ident:  arg.(*ast.Ident),
-										engine: e,
-									}
-									return true
+							if e := em.matchEngine(obj); e != nil {
+								if engine != nil && engine != e {
+									panic("not support multi type builder.")
 								}
+								injectFuncsIdentSet[fn] = arg.(*ast.Ident)
+								engine = e
+								return true
 							}
 						}
 					}
@@ -87,16 +81,12 @@ func Load(wd string, env []string) error {
 				return true
 			})
 
-			// TODO: support more then 1 func
-			if len(injectFuncsConfigSet) == 1 {
-				for _, config := range injectFuncsConfigSet {
-					e := config.engine
-					r := newRouteGen(e.TargetSels(), e.MiddlewareSelector())
-					routes := r.parseRoute(wd)
+			if len(injectFuncsIdentSet) > 0 {
+				r := newRouteGen(engine.TargetSels(), engine.MiddlewareSelector())
+				routes := r.parseRoute(wd)
 
-					g := newGen(pkg, routes)
-					g.inject(f, injectFuncsConfigSet)
-				}
+				g := newGen(pkg, routes)
+				g.inject(f, engine, injectFuncsIdentSet)
 			}
 		}
 	}
@@ -145,10 +135,10 @@ func (g *gen) generate(f *ast.File) error {
 	return nil
 }
 
-func (g *gen) inject(f *ast.File, injectFuncsConfigSet map[*ast.FuncDecl]*injectConfig) {
+func (g *gen) inject(f *ast.File, engine *engine, injectFuncsIdentSet map[*ast.FuncDecl]*ast.Ident) {
 	// build imports
-	scopes := make([]*types.Scope, len(injectFuncsConfigSet))
-	for fn := range injectFuncsConfigSet {
+	scopes := make([]*types.Scope, len(injectFuncsIdentSet))
+	for fn := range injectFuncsIdentSet {
 		scopes = append(scopes, g.pkg.TypesInfo.Scopes[fn.Type])
 	}
 	n := newNamerWithScopes(scopes)
@@ -165,11 +155,10 @@ func (g *gen) inject(f *ast.File, injectFuncsConfigSet map[*ast.FuncDecl]*inject
 			}
 		} else if fn, ok := c.Node().(*ast.FuncDecl); ok {
 			// inject body
-			if injectConfig, ok := injectFuncsConfigSet[fn]; ok {
-				ident := injectConfig.ident
+			if ident, ok := injectFuncsIdentSet[fn]; ok {
 				scope := g.pkg.TypesInfo.Scopes[fn.Type]
 				n := newNamer(scope)
-				stmts := g.buildInjectStmts(injectConfig.engine, ident, g.routes, routePackagesImports, n)
+				stmts := g.buildInjectStmts(engine, ident, g.routes, routePackagesImports, n)
 
 				block := &ast.BlockStmt{List: stmts}
 				fn.Body = block

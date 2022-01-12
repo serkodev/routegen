@@ -27,13 +27,6 @@ type engine struct {
 //go:embed engineconfig/gin.json
 var ginJSON []byte
 
-func defaultEngines() []*engine {
-	e, _ := newEngine(ginJSON)
-	return []*engine{
-		e,
-	}
-}
-
 func newEngine(data []byte) (*engine, error) {
 	var e *engine
 	if err := json.Unmarshal(data, &e); err != nil {
@@ -120,4 +113,26 @@ func (e *engine) GenSel(i *ast.Ident, sel string, route string, handle string) s
 		panic("generate expr error")
 	}
 	return expr.String()
+}
+
+type engineManager struct {
+	engines []*engine
+}
+
+func newEngineManager() *engineManager {
+	e, _ := newEngine(ginJSON)
+	return &engineManager{
+		engines: []*engine{
+			e,
+		},
+	}
+}
+
+func (m *engineManager) matchEngine(obj types.Object) *engine {
+	for _, e := range m.engines {
+		if e.ValidInjectType(obj.Type()) {
+			return e
+		}
+	}
+	return nil
 }
