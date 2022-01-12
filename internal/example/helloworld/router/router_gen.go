@@ -19,46 +19,46 @@ import (
 	pbr_route10 "example.com/foo/router/blog"
 )
 
-func Build(grp *gin.Engine) {
-	grp.POST("/", POST)
+func Build(g *gin.Engine) {
+	g.POST("/", POST)
 	privateaction := &privateAction{}
-	grp.GET("/private-action", privateaction.GET)
-	grp.GET("/:id", pbr_route.GET)
-	grp.GET("/about", pbr_route2.GET)
-	grp2 := grp.Group("/api")
+	g.GET("/private-action", privateaction.GET)
+	g.GET("/:id", pbr_route.GET)
+	g.GET("/about", pbr_route2.GET)
+	grp := g.Group("/api")
 	{
-		grp2.Use(pbr_route3.Middleware)
-		grp2.GET("/post", pbr_route4.GET)
+		grp.Use(pbr_route3.Middleware)
+		grp.GET("/post", pbr_route4.GET)
 		action := &pbr_route4.Action{}
-		grp2.GET("/post/action", action.GET)
+		grp.GET("/post/action", action.GET)
 		blist := &pbr_route4.BList{}
-		grp2.POST("/post/b-list", blist.POST)
+		grp.POST("/post/b-list", blist.POST)
 		list := &pbr_route4.List{}
-		grp2.GET("/post/hello", list.GET)
-		grp2.POST("/post/hello", list.POST)
-		grp2.GET("/user/*", pbr_route5.GET)
-		grp2.GET("/user/:id", pbr_route6.GET)
-		grp3 := grp2.Group("/user/list")
+		grp.GET("/post/hello", list.GET)
+		grp.POST("/post/hello", list.POST)
+		grp.GET("/user/*", pbr_route5.GET)
+		grp.GET("/user/:id", pbr_route6.GET)
+		grp2 := grp.Group("/user/list")
 		{
-			grp3.Use(pbr_route7.Middleware)
-			grp3.GET("", pbr_route7.GET)
-			grp3.POST("", pbr_route7.POST)
-			grp4 := grp3.Group("/action")
+			grp2.Use(pbr_route7.Middleware)
+			grp2.GET("", pbr_route7.GET)
+			grp2.POST("", pbr_route7.POST)
+			grp3 := grp2.Group("/action")
 			{
 				action2 := &pbr_route7.Action{}
-				grp4.Use(action2.Middleware)
-				grp4.GET("", action2.GET)
-				grp5 := grp3.Group("/admin")
+				grp3.Use(action2.Middleware)
+				grp3.GET("", action2.GET)
+				grp4 := grp2.Group("/admin")
 				{
-					grp5.Use(pbr_route8.Middleware)
+					grp4.Use(pbr_route8.Middleware)
 					action3 := &pbr_route8.Action{}
-					grp5.GET("/action", action3.GET)
+					grp4.GET("/action", action3.GET)
 				}
 			}
 		}
-		grp2.GET("/yser", pbr_route9.GET)
+		grp.GET("/yser", pbr_route9.GET)
 	}
-	grp.GET("/blog", pbr_route10.GET)
+	g.GET("/blog", pbr_route10.GET)
 }
 
 func Run() {
