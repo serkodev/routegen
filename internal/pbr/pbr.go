@@ -31,36 +31,24 @@ func newGen(pkg *packages.Package, routes []*RoutePackage) *gen {
 	}
 }
 
-func Load() error {
-	wd, err := os.Getwd()
-	if err != nil {
-		fmt.Println("failed to get working directory: ", err)
-		return err
-	}
-	fmt.Println(wd)
-
+func Load(wd string, env []string) error {
 	cfg := &packages.Config{
-		// Context:    ctx,
 		Mode: packages.NeedName | packages.NeedFiles | packages.NeedCompiledGoFiles | // LoadFiles
 			packages.NeedImports | // LoadImports
 			packages.NeedTypes | packages.NeedTypesSizes | // LoadTypes
 			packages.NeedSyntax | packages.NeedTypesInfo | // LoadSyntax
 			packages.NeedDeps, // LoadTypes
-		Dir: wd,
-		// Env:        env,
+		Dir:        wd,
+		Env:        env,
 		BuildFlags: []string{"-tags=pbrinject"},
-		// TODO(light): Use ParseFile to skip function bodies and comments in indirect packages.
 	}
-
 	pkgs, err := packages.Load(cfg)
 	if err != nil {
 		return err
 	}
 
 	// TODO: lazy load
-	e := defaultEngine()
-	r := newRouteGen(e.TargetSels(), e.MiddlewareSelector())
-	routes := r.parseRoute(wd)
+	engines := defaultEngines()
 
 	for _, pkg := range pkgs {
 		fmt.Println("path", pkg.PkgPath)
@@ -83,23 +71,32 @@ func Load() error {
 				if buildCall != nil {
 					// inject build found, assign engine
 					for _, arg := range buildCall.Args {
-						obj := qualifiedIdentObject(pkg.TypesInfo, arg)
-						// TODO: loop engine list
-						if obj != nil && e.ValidInjectType(obj.Type()) {
-							injectFuncsConfigSet[fn] = &injectConfig{
-								ident:  arg.(*ast.Ident),
-								engine: e,
+						if obj := qualifiedIdentObject(pkg.TypesInfo, arg); obj != nil {
+							for _, e := range engines {
+								if e.ValidInjectType(obj.Type()) {
+									injectFuncsConfigSet[fn] = &injectConfig{
+										ident:  arg.(*ast.Ident),
+										engine: e,
+									}
+									return true
+								}
 							}
-							return true
 						}
 					}
 				}
 				return true
 			})
 
-			if len(injectFuncsConfigSet) > 0 {
-				g := newGen(pkg, routes)
-				g.inject(f, injectFuncsConfigSet)
+			// TODO: support more then 1 func
+			if len(injectFuncsConfigSet) == 1 {
+				for _, config := range injectFuncsConfigSet {
+					e := config.engine
+					r := newRouteGen(e.TargetSels(), e.MiddlewareSelector())
+					routes := r.parseRoute(wd)
+
+					g := newGen(pkg, routes)
+					g.inject(f, injectFuncsConfigSet)
+				}
 			}
 		}
 	}

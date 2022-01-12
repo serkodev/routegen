@@ -27,9 +27,11 @@ type engine struct {
 //go:embed engineconfig/gin.json
 var ginJSON []byte
 
-func defaultEngine() *engine {
+func defaultEngines() []*engine {
 	e, _ := newEngine(ginJSON)
-	return e
+	return []*engine{
+		e,
+	}
 }
 
 func newEngine(data []byte) (*engine, error) {
