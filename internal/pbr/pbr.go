@@ -158,7 +158,16 @@ func (g *gen) inject(f *ast.File, engine *engine, injectFuncsIdentSet map[*ast.F
 			if ident, ok := injectFuncsIdentSet[fn]; ok {
 				scope := g.pkg.TypesInfo.Scopes[fn.Type]
 				n := newNamer(scope)
-				stmts := g.buildInjectStmts(engine, ident, g.routes, routePackagesImports, n)
+
+				sbuf := new(strings.Builder)
+				g.buildInjectStmts(sbuf, engine, ident, g.routes, routePackagesImports, n)
+
+				fmt.Println(sbuf.String())
+
+				stmts, err := parseExprs(sbuf.String())
+				if err != nil {
+					panic("parse exprs error.")
+				}
 
 				block := &ast.BlockStmt{List: stmts}
 				fn.Body = block
@@ -198,10 +207,12 @@ func (g *gen) importsFromRoutes(routes []*RoutePackage, n *namer) ([]*ast.Import
 	return specs, routePackagesImports
 }
 
-func (g *gen) buildInjectStmts(e *engine, ident *ast.Ident, routePkgs []*RoutePackage, routePackagesImports map[*RoutePackage]*ast.ImportSpec, n *namer) []ast.Stmt {
-	var stmts []ast.Stmt
+func (g *gen) buildInjectStmts(buf *strings.Builder, e *engine, ident *ast.Ident, routePkgs []*RoutePackage, routePackagesImports map[*RoutePackage]*ast.ImportSpec, n *namer) {
+	// var stmts []ast.Stmt
 
 	for _, routePkg := range routePkgs {
+		groupCount := 0
+
 		routePkgIdent := ident
 		routePkgPath := routePkg.routePath()
 
@@ -211,6 +222,7 @@ func (g *gen) buildInjectStmts(e *engine, ident *ast.Ident, routePkgs []*RoutePa
 		}
 
 		for _, r := range routePkg.Routes {
+
 			rIdent := routePkgIdent
 			rPath := buildRoutePath(routePkgPath, r.Path)
 
@@ -228,10 +240,12 @@ func (g *gen) buildInjectStmts(e *engine, ident *ast.Ident, routePkgs []*RoutePa
 
 				// generate expr with template
 				expr := e.GenGroup(rIdent, groupRoutePath)
-				stmts = append(stmts, mustParseExprF(`%s := %s`, groupIdent.Name, expr))
-
+				buf.WriteString(fmt.Sprintf("%s := %s", groupIdent.Name, expr) + "\n")
 				rIdent = groupIdent
 				rPath = ""
+
+				groupCount++
+				buf.WriteString("{\n")
 			}
 
 			callObj := imp
@@ -243,7 +257,7 @@ func (g *gen) buildInjectStmts(e *engine, ident *ast.Ident, routePkgs []*RoutePa
 				if imp != "" {
 					sub = imp + "." + sub
 				}
-				stmts = append(stmts, mustParseExprF(`%s := &%s{}`, typeVar, sub))
+				buf.WriteString(fmt.Sprintf("%s := &%s{}", typeVar, sub) + "\n")
 				callObj = typeVar
 			}
 
@@ -254,16 +268,18 @@ func (g *gen) buildInjectStmts(e *engine, ident *ast.Ident, routePkgs []*RoutePa
 					selector = callObj + "." + selector
 				}
 				if expr := e.GenSel(rIdent, sel, rPath, selector); expr != "" {
-					stmts = append(stmts, mustParseExpr(expr))
+					buf.WriteString(expr + "\n")
 				}
 			}
 		}
 
 		// sub packages
 		if len(routePkg.SubPackages) > 0 {
-			stmts = append(stmts, g.buildInjectStmts(e, routePkgIdent, routePkg.SubPackages, routePackagesImports, n)...)
+			g.buildInjectStmts(buf, e, routePkgIdent, routePkg.SubPackages, routePackagesImports, n)
+		}
+
+		for i := 0; i < groupCount; i++ {
+			buf.WriteString("}\n")
 		}
 	}
-
-	return stmts
 }
