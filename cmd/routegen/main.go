@@ -4,7 +4,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/serkodev/pbr/internal/pbr"
+	"github.com/serkodev/routegen/internal/routegen"
 )
 
 func main() {
@@ -15,5 +15,5 @@ func main() {
 		return
 	}
 
-	pbr.Load(wd, os.Environ())
+	routegen.Load(wd, os.Environ())
 }

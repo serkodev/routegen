@@ -9,7 +9,7 @@
             "type": "go",
             "request": "launch",
             "mode": "auto",
-            "program": "${workspaceFolder}/cmd/pbr",
+            "program": "${workspaceFolder}/cmd/routegen",
             "cwd": "${workspaceFolder}/internal/example/helloworld/router",
         }
     ]

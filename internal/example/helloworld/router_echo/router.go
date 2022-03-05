@@ -1,12 +1,12 @@
-//go:build pbrinject
+//go:build routegeninject
 
 package router
 
 import (
 	"github.com/labstack/echo"
-	"github.com/serkodev/pbr"
+	"github.com/serkodev/routegen"
 )
 
 func Build(e *echo.Echo) { // gin.RouterGroup
-	pbr.Build(e)
+	routegen.Build(e)
 }

@@ -1,4 +1,4 @@
-package pbr
+package routegen
 
 import (
 	"errors"
@@ -7,13 +7,13 @@ import (
 	"strings"
 )
 
-func isPbrImport(path string) bool {
+func isroutegenImport(path string) bool {
 	// TODO(light): This is depending on details of the current loader.
 	const vendorPart = "vendor/"
 	if i := strings.LastIndex(path, vendorPart); i != -1 && (i == 0 || path[i-1] == '/') {
 		path = path[i+len(vendorPart):]
 	}
-	return path == "github.com/serkodev/pbr"
+	return path == "github.com/serkodev/routegen"
 }
 
 // qualifiedIdentObject finds the object for an identifier or a
@@ -36,7 +36,7 @@ func qualifiedIdentObject(info *types.Info, expr ast.Expr) types.Object {
 	}
 }
 
-// findInjectorBuild returns the pbr.Build call if fn is an injector template.
+// findInjectorBuild returns the routegen.Build call if fn is an injector template.
 // It returns nil if the function is not an injector template.
 func findInjectorBuild(info *types.Info, fn *ast.FuncDecl) (*ast.CallExpr, error) {
 	if fn.Body == nil {
@@ -44,7 +44,7 @@ func findInjectorBuild(info *types.Info, fn *ast.FuncDecl) (*ast.CallExpr, error
 	}
 	numStatements := 0
 	invalid := false
-	var pbrBuildCall *ast.CallExpr
+	var routegenBuildCall *ast.CallExpr
 	for _, stmt := range fn.Body.List {
 		switch stmt := stmt.(type) {
 		case *ast.ExprStmt:
@@ -56,7 +56,7 @@ func findInjectorBuild(info *types.Info, fn *ast.FuncDecl) (*ast.CallExpr, error
 			if call == nil {
 				continue
 			}
-			pbrBuildCall = call
+			routegenBuildCall = call
 		case *ast.EmptyStmt:
 			// Do nothing.
 		case *ast.ReturnStmt:
@@ -68,13 +68,13 @@ func findInjectorBuild(info *types.Info, fn *ast.FuncDecl) (*ast.CallExpr, error
 			invalid = true
 		}
 	}
-	if pbrBuildCall == nil {
+	if routegenBuildCall == nil {
 		return nil, nil
 	}
 	if invalid {
-		return nil, errors.New("a call to pbr.Build indicates that this function is an injector, but injectors must consist of only the pbr.Build call and an optional return")
+		return nil, errors.New("a call to routegen.Build indicates that this function is an injector, but injectors must consist of only the routegen.Build call and an optional return")
 	}
-	return pbrBuildCall, nil
+	return routegenBuildCall, nil
 }
 
 func getInjectorStmt(info *types.Info, stmt ast.Stmt) *ast.CallExpr {
@@ -93,7 +93,7 @@ func getInjectorStmt(info *types.Info, stmt ast.Stmt) *ast.CallExpr {
 			}
 		}
 		buildObj := qualifiedIdentObject(info, call.Fun)
-		if buildObj == nil || buildObj.Pkg() == nil || !isPbrImport(buildObj.Pkg().Path()) || buildObj.Name() != "Build" {
+		if buildObj == nil || buildObj.Pkg() == nil || !isroutegenImport(buildObj.Pkg().Path()) || buildObj.Name() != "Build" {
 			return nil
 		}
 		return call

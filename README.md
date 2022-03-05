@@ -1,4 +1,5 @@
-pbr - Package-based Router
+# routegen
+file-system based route generator
 
 ```
 user/id/ -> "user/id/"

@@ -1,4 +1,4 @@
-package pbr
+package routegen
 
 import (
 	"os"

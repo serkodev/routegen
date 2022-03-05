@@ -4,7 +4,7 @@ go 1.17
 
 require (
 	github.com/gin-gonic/gin v1.7.7
-	github.com/serkodev/pbr v0.0.0
+	github.com/serkodev/routegen v0.0.0
 )
 
 require (
@@ -34,4 +34,4 @@ require (
 	gopkg.in/yaml.v2 v2.2.8 // indirect
 )
 
-replace github.com/serkodev/pbr v0.0.0 => ../../../
+replace github.com/serkodev/routegen v0.0.0 => ../../../

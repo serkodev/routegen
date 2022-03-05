@@ -1,4 +1,4 @@
-package pbr
+package routegen
 
 import (
 	"fmt"
@@ -100,7 +100,7 @@ type routeGen struct {
 	sels          map[string]struct{}
 }
 
-var pbrRegex = regexp.MustCompile(`^//\s*pbr\s+(.*)$`)
+var routegenRegex = regexp.MustCompile(`^//\s*routegen\s+(.*)$`)
 
 func newRouteGen(targetSelectors []string, middlewareSelector string) *routeGen {
 	r := &routeGen{
@@ -192,7 +192,7 @@ func (r *routeGen) processTypeOption(pkg *packages.Package) map[string]*RouteTyp
 					setted := false
 
 					for _, comment := range decl.Doc.List {
-						match := pbrRegex.FindStringSubmatch(comment.Text)
+						match := routegenRegex.FindStringSubmatch(comment.Text)
 						if match != nil {
 							query := match[1]
 							if s := strings.SplitN(query, "=", 2); len(s) == 2 {

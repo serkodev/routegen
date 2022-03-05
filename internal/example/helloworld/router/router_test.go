@@ -1,12 +1,12 @@
-//go:build pbrinject
+//go:build routegeninject
 
 package router_test
 
 import (
 	"github.com/gin-gonic/gin"
-	"github.com/serkodev/pbr"
+	"github.com/serkodev/routegen"
 )
 
 func TestBuild(g *gin.Engine) { // gin.RouterGroup
-	pbr.Build(g)
+	routegen.Build(g)
 }

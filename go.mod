@@ -1,4 +1,4 @@
-module github.com/serkodev/pbr
+module github.com/serkodev/routegen
 
 go 1.17
 
