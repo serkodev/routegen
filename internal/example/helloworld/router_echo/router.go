@@ -7,6 +7,6 @@ import (
 	"github.com/serkodev/routegen"
 )
 
-func Build(e *echo.Echo) { // gin.RouterGroup
+func Build(e *echo.Echo) {
 	routegen.Build(e)
 }
