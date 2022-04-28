@@ -7,16 +7,16 @@ package router
 
 import (
 	"github.com/gin-gonic/gin"
-	routegen_r "example.com/foo/router/_id"
-	routegen_r2 "example.com/foo/router/about"
-	routegen_r3 "example.com/foo/router/api"
-	routegen_r4 "example.com/foo/router/api/post"
-	routegen_r5 "example.com/foo/router/api/user/_"
-	routegen_r6 "example.com/foo/router/api/user/_id"
-	routegen_r7 "example.com/foo/router/api/user/list"
-	routegen_r8 "example.com/foo/router/api/user/list/admin"
-	routegen_r9 "example.com/foo/router/api/yser"
-	routegen_r10 "example.com/foo/router/blog"
+	routegen_r "example.com/helloworld/router/_id"
+	routegen_r2 "example.com/helloworld/router/about"
+	routegen_r3 "example.com/helloworld/router/api"
+	routegen_r4 "example.com/helloworld/router/api/post"
+	routegen_r5 "example.com/helloworld/router/api/user/_"
+	routegen_r6 "example.com/helloworld/router/api/user/_id"
+	routegen_r7 "example.com/helloworld/router/api/user/list"
+	routegen_r8 "example.com/helloworld/router/api/user/list/admin"
+	routegen_r9 "example.com/helloworld/router/api/yser"
+	routegen_r10 "example.com/helloworld/router/blog"
 )
 
 func Build(g *gin.Engine) {

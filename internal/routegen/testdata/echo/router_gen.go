@@ -7,7 +7,7 @@ package router
 
 import (
 	"github.com/labstack/echo"
-	routegen_r "example.com/foo/router_echo/blog"
+	routegen_r "example.com/foo/blog"
 )
 
 func Build(e *echo.Echo) {

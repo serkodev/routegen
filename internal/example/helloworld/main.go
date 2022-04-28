@@ -1,6 +1,6 @@
 package main
 
-import "example.com/foo/router"
+import "example.com/helloworld/router"
 
 func main() {
 	router.Run()
