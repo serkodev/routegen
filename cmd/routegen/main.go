@@ -15,5 +15,11 @@ func main() {
 		return
 	}
 
-	routegen.Load(wd, os.Environ())
+	results, err := routegen.Load(wd, os.Environ())
+	if err != nil {
+		log.Println("generate route error: ", err)
+	}
+	for _, r := range results {
+		r.Save()
+	}
 }
