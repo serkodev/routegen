@@ -1,5 +1,5 @@
 go 1.18
 
 use ./
-use ./internal/example/helloworld
+use ./internal/routegen/testdata/basic
 use ./internal/routegen/testdata/echo
