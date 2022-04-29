@@ -3,14 +3,24 @@ package routegen
 import (
 	"bytes"
 	"errors"
+	"io/ioutil"
 	"os"
 	"testing"
 )
 
 func TestRouteGen(t *testing.T) {
-	wd := "./testdata/echo"
-	if err := getTest(wd); err != nil {
-		t.Error(err.Error())
+	wd := "./testdata"
+
+	files, err := ioutil.ReadDir(wd)
+
+	if err != nil {
+		t.Error(err)
+	}
+
+	for _, f := range files {
+		if err := getTest(wd + "/" + f.Name()); err != nil {
+			t.Error(err.Error())
+		}
 	}
 }
 
