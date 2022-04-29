@@ -3,3 +3,5 @@ go 1.18
 use ./
 use ./internal/routegen/testdata/basic
 use ./internal/routegen/testdata/echo
+use ./internal/routegen/testdata/middleware
+use ./internal/routegen/testdata/wildcard

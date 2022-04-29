@@ -10,7 +10,7 @@
             "request": "launch",
             "mode": "auto",
             "program": "${workspaceFolder}/cmd/routegen",
-            "cwd": "${workspaceFolder}/internal/example/helloworld/router",
+            "cwd": "${workspaceFolder}/internal/routegen/testdata/middleware",
         }
     ]
 }
