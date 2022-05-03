@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io/ioutil"
 	"os"
+	"sync"
 	"testing"
 )
 
@@ -17,11 +18,17 @@ func TestRouteGen(t *testing.T) {
 		t.Error(err)
 	}
 
+	var wg sync.WaitGroup
 	for _, f := range files {
-		if err := getTest(wd + "/" + f.Name()); err != nil {
-			t.Error(err.Error())
-		}
+		wg.Add(1)
+		go func(filename string) {
+			defer wg.Done()
+			if err := getTest(filename); err != nil {
+				t.Error(err.Error())
+			}
+		}(wd + "/" + f.Name())
 	}
+	wg.Wait()
 }
 
 func getTest(dir string) error {
