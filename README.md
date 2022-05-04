@@ -112,3 +112,10 @@ func main() {
 	g.Run()
 }
 ```
+
+# Documentation
+
+- [Wildcard & named parameter](./internal/routegen/testdata/wildcard/README.md)
+- [Middleware](./internal/routegen/testdata/middleware/README.md)
+- [Sub-route](./internal/routegen/testdata/subroute/README.md): Create routes with public type
+- [Route alias](./internal/routegen/testdata/alias/README.md): Customize sub-route name
