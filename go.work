@@ -5,3 +5,5 @@ use ./internal/routegen/testdata/basic
 use ./internal/routegen/testdata/echo
 use ./internal/routegen/testdata/middleware
 use ./internal/routegen/testdata/wildcard
+use ./internal/routegen/testdata/subroute
+use ./internal/routegen/testdata/alias

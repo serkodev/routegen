@@ -7,28 +7,16 @@ package router
 
 import (
 	"github.com/gin-gonic/gin"
-	routegen_r "example.com/helloworld/api/post"
-	routegen_r2 "example.com/helloworld/api/user/list"
-	routegen_r3 "example.com/helloworld/api/user/list/admin"
-	routegen_r4 "example.com/helloworld/foo"
+	routegen_r "example.com/helloworld/foo"
+	routegen_r2 "example.com/helloworld/foo/bar"
+	routegen_r3 "example.com/helloworld/foo/bar/baz"
 )
 
 func Build(g *gin.Engine) {
-	g.POST("/", POST)
-	privateaction := &privateAction{}
-	g.GET("/private-action", privateaction.GET)
-	g.GET("/api/post", routegen_r.GET)
-	action := &routegen_r.Action{}
-	g.GET("/api/post/action", action.GET)
-	blist := &routegen_r.BList{}
-	g.POST("/api/post/b-list", blist.POST)
-	list := &routegen_r.List{}
-	g.GET("/api/post/hello", list.GET)
-	g.POST("/api/post/hello", list.POST)
-	g.GET("/api/user/list", routegen_r2.GET)
-	action2 := &routegen_r3.Action{}
-	g.GET("/api/user/list/admin/action", action2.GET)
-	g.GET("/foo", routegen_r4.GET)
+	g.GET("/", GET)
+	g.GET("/foo", routegen_r.GET)
+	g.GET("/foo/bar", routegen_r2.GET)
+	g.GET("/foo/bar/baz", routegen_r3.GET)
 }
 
 func Run() {
