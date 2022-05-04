@@ -121,8 +121,6 @@ func (r *routeGen) parseRoute(root string) []*RoutePackage {
 
 	filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if info.IsDir() {
-			fmt.Println("path", path)
-
 			var group *routeGroup
 			for len(groupStack) > 0 {
 				g := groupStack[len(groupStack)-1]

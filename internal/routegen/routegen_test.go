@@ -20,11 +20,14 @@ func TestRouteGen(t *testing.T) {
 
 	var wg sync.WaitGroup
 	for _, f := range files {
+		if !f.IsDir() {
+			continue
+		}
 		wg.Add(1)
-		go func(filename string) {
+		go func(dir string) {
 			defer wg.Done()
-			if err := getTest(filename); err != nil {
-				t.Error(err.Error())
+			if err := getTest(dir); err != nil {
+				t.Error(dir, err.Error())
 			}
 		}(wd + "/" + f.Name())
 	}
@@ -32,7 +35,7 @@ func TestRouteGen(t *testing.T) {
 }
 
 func getTest(dir string) error {
-	results, err := Load(dir, os.Environ())
+	results, err := Load(dir, os.Environ(), ".")
 	if err != nil {
 		return err
 	}

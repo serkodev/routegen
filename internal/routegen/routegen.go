@@ -26,7 +26,7 @@ func newGen(pkg *packages.Package, routes []*RoutePackage) *gen {
 	}
 }
 
-func Load(wd string, env []string) ([]result, error) {
+func Load(wd string, env []string, path string) ([]result, error) {
 	cfg := &packages.Config{
 		Mode: packages.NeedName | packages.NeedFiles | packages.NeedCompiledGoFiles | // LoadFiles
 			packages.NeedImports | // LoadImports
@@ -37,7 +37,8 @@ func Load(wd string, env []string) ([]result, error) {
 		Env:        env,
 		BuildFlags: []string{"-tags=routegeninject"},
 	}
-	pkgs, err := packages.Load(cfg)
+
+	pkgs, err := packages.Load(cfg, "pattern="+path)
 	if err != nil {
 		return nil, err
 	}
@@ -47,8 +48,6 @@ func Load(wd string, env []string) ([]result, error) {
 	var results []result
 
 	for _, pkg := range pkgs {
-		fmt.Println("path", pkg.PkgPath)
-
 		for _, f := range pkg.Syntax {
 			injectFuncsIdentSet := make(map[*ast.FuncDecl]*ast.Ident)
 
@@ -84,7 +83,7 @@ func Load(wd string, env []string) ([]result, error) {
 
 			if len(injectFuncsIdentSet) > 0 {
 				r := newRouteGen(engine.TargetSels(), engine.MiddlewareSelector())
-				routes := r.parseRoute(wd)
+				routes := r.parseRoute(filepath.Join(wd, path))
 
 				g := newGen(pkg, routes)
 				result, err := g.inject(f, engine, injectFuncsIdentSet)
@@ -111,8 +110,8 @@ func (g *gen) generate(f *ast.File) ([]byte, error) {
 	out.WriteString("\n")
 
 	for i, decl := range f.Decls {
-		printAST(token.NewFileSet(), decl)
-		fmt.Print("\n")
+		// printAST(token.NewFileSet(), decl)
+		// fmt.Print("\n")
 
 		if err := printer.Fprint(&out, token.NewFileSet(), decl); err != nil {
 			return nil, err
@@ -163,8 +162,6 @@ func (g *gen) inject(f *ast.File, engine *engine, injectFuncsIdentSet map[*ast.F
 
 				sbuf := new(strings.Builder)
 				g.buildInjectStmts(sbuf, engine, ident, g.routes, routePackagesImports, n)
-
-				fmt.Println(sbuf.String())
 
 				stmts, err := parseExprs(sbuf.String())
 				if err != nil {

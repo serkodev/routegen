@@ -17,3 +17,7 @@ func (r result) Save() error {
 	_, err = out.Write(r.content)
 	return err
 }
+
+func (r result) OutPath() string {
+	return r.outPath
+}

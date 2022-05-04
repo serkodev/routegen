@@ -10,7 +10,8 @@
             "request": "launch",
             "mode": "auto",
             "program": "${workspaceFolder}/cmd/routegen",
-            "cwd": "${workspaceFolder}/internal/routegen/testdata/middleware",
+            "args": ["./internal/routegen/testdata/basic"],
+            "cwd": "${workspaceFolder}",
         }
     ]
 }
