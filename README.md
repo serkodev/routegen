@@ -119,3 +119,7 @@ func main() {
 - [Middleware](./internal/routegen/testdata/middleware/README.md)
 - [Sub-route](./internal/routegen/testdata/subroute/README.md): Create routes with public type
 - [Route alias](./internal/routegen/testdata/alias/README.md): Customize sub-route name
+
+# LICENSE
+
+MIT License
