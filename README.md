@@ -113,7 +113,7 @@ func main() {
 }
 ```
 
-# Documentation
+# Documentations
 
 - [Wildcard & named parameter](./internal/routegen/testdata/wildcard/README.md)
 - [Middleware](./internal/routegen/testdata/middleware/README.md)
