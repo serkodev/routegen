@@ -7,8 +7,7 @@ File-system based route generator for Go. Compatible with any web frameworks.
 ## Features
 
 - [x] Generate routes from file-system
-- [x] All web frameworks compatible (customizable)
-- [x] Web framework auto detection (currently supports [Gin](https://github.com/gin-gonic/gin) & [echo](https://github.com/labstack/echo))
+- [x] All web frameworks compatible ([customizable]((./internal/routegen/engineconfig)), default supports [Gin](https://github.com/gin-gonic/gin) & [echo](https://github.com/labstack/echo))
 - [x] Support middleware
 - [x] Support route with wildcard `/foo/*`
 - [x] Support route with named parameter `/foo/:id`
@@ -19,6 +18,15 @@ File-system based route generator for Go. Compatible with any web frameworks.
 ```
 go install github.com/serkodev/routegen@lastest
 ```
+
+## Guides
+
+- [Tutorial](#how-it-works)
+- [Work with all web frameworks](./internal/routegen/engineconfig)
+- [Wildcard & named parameter](./internal/routegen/testdata/wildcard)
+- [Middleware](./internal/routegen/testdata/middleware)
+- [Sub-route](./internal/routegen/testdata/subroute): Create routes with public type
+- [Route alias](./internal/routegen/testdata/alias): Customize sub-route name
 
 ## How it works?
 
@@ -112,13 +120,6 @@ func main() {
 	g.Run()
 }
 ```
-
-## Documentations
-
-- [Wildcard & named parameter](./internal/routegen/testdata/wildcard)
-- [Middleware](./internal/routegen/testdata/middleware)
-- [Sub-route](./internal/routegen/testdata/subroute): Create routes with public type
-- [Route alias](./internal/routegen/testdata/alias): Customize sub-route name
 
 ## LICENSE
 
