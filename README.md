@@ -16,7 +16,7 @@ File-system based route generator for Go. Compatible with any web frameworks.
 ## Install
 
 ```
-go install github.com/serkodev/routegen@latest
+go install github.com/serkodev/routegen/cmd/routegen@latest
 ```
 
 ## Guides
