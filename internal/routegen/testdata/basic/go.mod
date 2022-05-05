@@ -1,9 +1,10 @@
-module example.com/helloworld
+module example.com/basic
 
-go 1.17
+go 1.18
 
 require (
 	github.com/gin-gonic/gin v1.7.7
+	github.com/serkodev/routegen v0.0.0-20220505105427-3905ad16696d
 )
 
 require (

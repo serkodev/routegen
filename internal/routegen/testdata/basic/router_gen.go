@@ -7,9 +7,9 @@ package router
 
 import (
 	"github.com/gin-gonic/gin"
-	routegen_r "example.com/helloworld/foo"
-	routegen_r2 "example.com/helloworld/foo/bar"
-	routegen_r3 "example.com/helloworld/foo/bar/baz"
+	routegen_r "example.com/basic/foo"
+	routegen_r2 "example.com/basic/foo/bar"
+	routegen_r3 "example.com/basic/foo/bar/baz"
 )
 
 func Build(g *gin.Engine) {

@@ -1,6 +1,6 @@
 module github.com/serkodev/routegen
 
-go 1.17
+go 1.18
 
 require (
 	golang.org/x/mod v0.5.1 // indirect
