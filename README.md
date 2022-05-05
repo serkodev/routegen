@@ -7,7 +7,7 @@ File-system based route generator for Go. Compatible with any web frameworks.
 ## Features
 
 - [x] Generate routes from file-system
-- [x] All web frameworks compatible ([customizable]((./internal/routegen/engineconfig)), default supports [Gin](https://github.com/gin-gonic/gin) & [echo](https://github.com/labstack/echo))
+- [x] All web frameworks compatible ([customizable](./internal/routegen/engineconfig), default supports [Gin](https://github.com/gin-gonic/gin) & [echo](https://github.com/labstack/echo))
 - [x] Support middleware
 - [x] Support route with wildcard `/foo/*`
 - [x] Support route with named parameter `/foo/:id`
