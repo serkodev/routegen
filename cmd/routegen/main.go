@@ -9,6 +9,7 @@ import (
 )
 
 func main() {
+	engineConfigPtr := flag.String("e", "", "engine config path for custom web framework")
 	flag.Parse()
 
 	// work dir
@@ -19,10 +20,10 @@ func main() {
 	}
 
 	// get dir
-	dir := packages(os.Args)
+	dir := packages(flag.Args())
 
 	// generate routes
-	results, err := routegen.Load(wd, os.Environ(), dir)
+	results, err := routegen.Load(wd, os.Environ(), dir, *engineConfigPtr)
 	if err != nil {
 		log.Println("generate route error: ", err)
 	}
@@ -38,8 +39,8 @@ func main() {
 }
 
 func packages(args []string) string {
-	if len(args) < 2 {
+	if len(args) == 0 {
 		return "."
 	}
-	return args[1]
+	return args[0]
 }

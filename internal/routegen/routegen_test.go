@@ -35,7 +35,7 @@ func TestRouteGen(t *testing.T) {
 }
 
 func getTest(dir string) error {
-	results, err := Load(dir, os.Environ(), ".")
+	results, err := Load(dir, os.Environ(), ".", "")
 	if err != nil {
 		return err
 	}

@@ -26,7 +26,7 @@ func newGen(pkg *packages.Package, routes []*RoutePackage) *gen {
 	}
 }
 
-func Load(wd string, env []string, path string) ([]result, error) {
+func Load(wd string, env []string, path string, customEngine string) ([]result, error) {
 	cfg := &packages.Config{
 		Mode: packages.NeedName | packages.NeedFiles | packages.NeedCompiledGoFiles | // LoadFiles
 			packages.NeedImports | // LoadImports
@@ -44,7 +44,11 @@ func Load(wd string, env []string, path string) ([]result, error) {
 	}
 
 	var engine *engine
-	em := newEngineManager()
+	em, err := newEngineManager(customEngine)
+	if err != nil {
+		return nil, err
+	}
+
 	var results []result
 
 	for _, pkg := range pkgs {

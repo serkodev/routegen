@@ -8,6 +8,9 @@ import (
 	"go/types"
 	"html/template"
 	"io"
+	"io/ioutil"
+	"log"
+	"os"
 )
 
 //go:embed engineconfig/gin.json
@@ -20,13 +23,44 @@ type engineManager struct {
 	engines []*engine
 }
 
-func newEngineManager() *engineManager {
-	return &engineManager{
-		engines: []*engine{
-			mustNewEngine(ginJSON),
-			mustNewEngine(echoJSON),
-		},
+func newEngineManager(customEngine string) (*engineManager, error) {
+	engines := []*engine{}
+
+	if customEngine == "" {
+		if _, err := os.Stat("./routegen.json"); err == nil {
+			customEngine = "./routegen.json"
+		}
 	}
+
+	// load custom engine
+	if customEngine != "" {
+		f, err := os.Open(customEngine)
+		if err != nil {
+			return nil, err
+		}
+		defer f.Close()
+
+		content, err := ioutil.ReadAll(f)
+		if err != nil {
+			return nil, err
+		}
+
+		engine, err := newEngine(content)
+		if err != nil {
+			return nil, err
+		}
+		engines = append(engines, engine)
+		log.Println("custom engine loaded:", customEngine)
+	}
+
+	engines = append(engines,
+		mustNewEngine(ginJSON),
+		mustNewEngine(echoJSON),
+	)
+
+	return &engineManager{
+		engines: engines,
+	}, nil
 }
 
 func (m *engineManager) matchEngine(obj types.Object) *engine {
