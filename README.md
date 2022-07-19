@@ -2,7 +2,8 @@
 
 File-system based route generator for Go. Compatible with any web frameworks.
 
-> ⚗ This project is in beta, it may contain bugs and have not being tested at all. Use under your own risk, but feel free to test, make pull request and improve this project.
+> **Note**  
+> This project is in beta, it may contain bugs and have not being tested at all. Use under your own risk, but feel free to test, make pull request and improve this project.
 
 ## Features
 
